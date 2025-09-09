@@ -6,6 +6,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Data;
+using Microsoft.ML;
+using Microsoft.ML.Data;
 using D2G.Iris.ML.ConfigUI.WPF.Commands;
 using D2G.Iris.ML.ConfigUI.WPF.Services;
 using D2G.Iris.ML.Core.Enums;
@@ -356,24 +359,29 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     var mlContext = new Microsoft.ML.MLContext(seed: 42);
                     Microsoft.ML.IDataView rawData;
 
-                    // Check if we have cleaned data from EDA outlier removal
+                    // **KEY FIX: Check if we have cleaned data from EDA outlier removal**
                     if (ExploratoryDataAnalysis.HasDataBeenCleaned())
                     {
-                        rawData = ExploratoryDataAnalysis.GetCleanedDataAsIDataView(
-                            mlContext, 
-                            enabledFields, 
-                            config.TargetField, 
-                            config.ModelType);
+                        Console.WriteLine("=============== Loading Data ===============");
+                        Console.WriteLine("Using cleaned dataset from EDA outlier removal.");
                         
-                        if (rawData != null)
+                        // Load cleaned data directly from the DataTable
+                        var cleanedDataTable = ExploratoryDataAnalysis.GetCleanedDataForTraining();
+                        if (cleanedDataTable != null)
                         {
-                            var cleanedRowCount = ExploratoryDataAnalysis.GetCleanedDataForTraining()?.Rows.Count ?? 0;
-                            Console.WriteLine("=============== Loading Data ===============");
-                            Console.WriteLine($"Using cleaned dataset from EDA outlier removal.");
-                            Console.WriteLine($">> Loaded {cleanedRowCount} rows of cleaned data.");
+                            Console.WriteLine($">> Loaded {cleanedDataTable.Rows.Count:N0} rows of cleaned data.");
+                            
+                            // Convert DataTable to IDataView
+                            rawData = ConvertDataTableToIDataView(
+                                mlContext, 
+                                cleanedDataTable, 
+                                enabledFields, 
+                                config.TargetField, 
+                                config.ModelType);
                         }
                         else
                         {
+                            Console.WriteLine("Warning: Cleaned data table is null, falling back to original data loading.");
                             // Fallback to original data loading
                             var dataLoader = new DatabaseDataLoader();
                             rawData = dataLoader.LoadDataFromSql(
@@ -387,6 +395,9 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     }
                     else
                     {
+                        Console.WriteLine("=============== Loading Data ===============");
+                        Console.WriteLine("Using original dataset from database.");
+                        
                         // Original data loading
                         var dataLoader = new DatabaseDataLoader();
                         rawData = dataLoader.LoadDataFromSql(
@@ -423,6 +434,240 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     throw;
                 }
             });
+        }
+
+        // Helper method to convert DataTable to IDataView
+        private Microsoft.ML.IDataView ConvertDataTableToIDataView(
+            Microsoft.ML.MLContext mlContext, 
+            DataTable dataTable, 
+            string[] featureColumns, 
+            string targetField, 
+            Core.Enums.ModelType modelType)
+        {
+            try
+            {
+                // Check if target column exists in DataTable
+                if (!dataTable.Columns.Contains(targetField))
+                {
+                    throw new InvalidOperationException($"Target column '{targetField}' not found in cleaned data. Available columns: {string.Join(", ", dataTable.Columns.Cast<DataColumn>().Select(c => c.ColumnName))}");
+                }
+
+                // Validate feature columns exist
+                var missingFeatures = featureColumns.Where(col => !dataTable.Columns.Contains(col)).ToList();
+                if (missingFeatures.Any())
+                {
+                    Console.WriteLine($"Warning: Missing feature columns: {string.Join(", ", missingFeatures)}");
+                    featureColumns = featureColumns.Where(col => dataTable.Columns.Contains(col)).ToArray();
+                }
+
+                Console.WriteLine($"Converting DataTable with {dataTable.Rows.Count:N0} rows, {featureColumns.Length} features, target: {targetField}");
+
+                switch (modelType)
+                {
+                    case Core.Enums.ModelType.BinaryClassification:
+                        return ConvertToBinaryClassificationDataView(mlContext, dataTable, featureColumns, targetField);
+                    
+                    case Core.Enums.ModelType.MultiClassClassification:
+                        return ConvertToMultiClassDataView(mlContext, dataTable, featureColumns, targetField);
+                    
+                    case Core.Enums.ModelType.Regression:
+                        return ConvertToRegressionDataView(mlContext, dataTable, featureColumns, targetField);
+                    
+                    default:
+                        throw new ArgumentException($"Unsupported model type: {modelType}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error converting DataTable to IDataView: {ex.Message}");
+                throw;
+            }
+        }
+
+        private Microsoft.ML.IDataView ConvertToBinaryClassificationDataView(Microsoft.ML.MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetField)
+        {
+            var dataPoints = new List<BinaryClassificationTrainingData>();
+            int validRows = 0;
+            int invalidRows = 0;
+            var labelCounts = new Dictionary<string, int>();
+            
+            foreach (DataRow row in dataTable.Rows)
+            {
+                try
+                {
+                    var features = new float[featureColumns.Length];
+                    bool validRow = true;
+                    
+                    for (int i = 0; i < featureColumns.Length; i++)
+                    {
+                        var value = row[featureColumns[i]];
+                        if (value == null || value == DBNull.Value)
+                        {
+                            features[i] = 0f;
+                        }
+                        else if (float.TryParse(value.ToString(), out float floatValue))
+                        {
+                            features[i] = floatValue;
+                        }
+                        else
+                        {
+                            features[i] = 0f;
+                        }
+                    }
+
+                    // Extract and convert label
+                    var labelValue = row[targetField];
+                    bool label = false;
+                    string labelString = "0";
+                    
+                    if (labelValue != null && labelValue != DBNull.Value)
+                    {
+                        labelString = labelValue.ToString().ToLower();
+                        label = labelString == "1" || labelString == "true" || labelString == "yes";
+                    }
+
+                    // Track label distribution
+                    var labelKey = label ? "1" : "0";
+                    labelCounts[labelKey] = labelCounts.ContainsKey(labelKey) ? labelCounts[labelKey] + 1 : 1;
+
+                    if (validRow)
+                    {
+                        dataPoints.Add(new BinaryClassificationTrainingData
+                        {
+                            Features = features,
+                            Label = label
+                        });
+                        validRows++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    invalidRows++;
+                    if (invalidRows <= 5) // Log first few errors only
+                    {
+                        Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
+                    }
+                    continue;
+                }
+            }
+
+            Console.WriteLine($"Conversion complete: {validRows} valid rows, {invalidRows} invalid rows");
+            Console.WriteLine("Label distribution:");
+            foreach (var kvp in labelCounts)
+            {
+                Console.WriteLine($"  {kvp.Key}: {kvp.Value:N0} samples");
+            }
+
+            if (!dataPoints.Any())
+            {
+                throw new InvalidOperationException("No valid data points created from DataTable");
+            }
+
+            var schemaDefinition = SchemaDefinition.Create(typeof(BinaryClassificationTrainingData));
+            schemaDefinition[nameof(BinaryClassificationTrainingData.Features)].ColumnType = 
+                new VectorDataViewType(NumberDataViewType.Single, featureColumns.Length);
+
+            return mlContext.Data.LoadFromEnumerable(dataPoints, schemaDefinition);
+        }
+
+        private Microsoft.ML.IDataView ConvertToMultiClassDataView(Microsoft.ML.MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetField)
+        {
+            var dataPoints = new List<MultiClassTrainingData>();
+            
+            foreach (DataRow row in dataTable.Rows)
+            {
+                try
+                {
+                    var features = new float[featureColumns.Length];
+                    
+                    for (int i = 0; i < featureColumns.Length; i++)
+                    {
+                        var value = row[featureColumns[i]];
+                        features[i] = value == null || value == DBNull.Value ? 0f : Convert.ToSingle(value);
+                    }
+
+                    var labelValue = row[targetField];
+                    uint label = 0;
+                    if (labelValue != null && labelValue != DBNull.Value && uint.TryParse(labelValue.ToString(), out uint parsedLabel))
+                    {
+                        label = parsedLabel;
+                    }
+
+                    dataPoints.Add(new MultiClassTrainingData
+                    {
+                        Features = features,
+                        Label = label
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
+                    continue;
+                }
+            }
+
+            if (!dataPoints.Any())
+            {
+                throw new InvalidOperationException("No valid data points created from DataTable");
+            }
+
+            var schemaDefinition = SchemaDefinition.Create(typeof(MultiClassTrainingData));
+            schemaDefinition[nameof(MultiClassTrainingData.Features)].ColumnType = 
+                new VectorDataViewType(NumberDataViewType.Single, featureColumns.Length);
+
+            Console.WriteLine($"Created multi-class data view with {dataPoints.Count} rows and {featureColumns.Length} features");
+            
+            return mlContext.Data.LoadFromEnumerable(dataPoints, schemaDefinition);
+        }
+
+        private Microsoft.ML.IDataView ConvertToRegressionDataView(Microsoft.ML.MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetField)
+        {
+            var dataPoints = new List<RegressionTrainingData>();
+            
+            foreach (DataRow row in dataTable.Rows)
+            {
+                try
+                {
+                    var features = new float[featureColumns.Length];
+                    
+                    for (int i = 0; i < featureColumns.Length; i++)
+                    {
+                        var value = row[featureColumns[i]];
+                        features[i] = value == null || value == DBNull.Value ? 0f : Convert.ToSingle(value);
+                    }
+
+                    var labelValue = row[targetField];
+                    float label = 0f;
+                    if (labelValue != null && labelValue != DBNull.Value && float.TryParse(labelValue.ToString(), out float parsedLabel))
+                    {
+                        label = parsedLabel;
+                    }
+
+                    dataPoints.Add(new RegressionTrainingData
+                    {
+                        Features = features,
+                        Label = label
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
+                    continue;
+                }
+            }
+
+            if (!dataPoints.Any())
+            {
+                throw new InvalidOperationException("No valid data points created from DataTable");
+            }
+
+            var schemaDefinition = SchemaDefinition.Create(typeof(RegressionTrainingData));
+            schemaDefinition[nameof(RegressionTrainingData.Features)].ColumnType = 
+                new VectorDataViewType(NumberDataViewType.Single, featureColumns.Length);
+
+            Console.WriteLine($"Created regression data view with {dataPoints.Count} rows and {featureColumns.Length} features");
+            
+            return mlContext.Data.LoadFromEnumerable(dataPoints, schemaDefinition);
         }
 
         private void UpdateFormTitle()
@@ -463,5 +708,30 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
             DataProcessingPipeline.SaveToConfig(_currentConfig);
         }
+    }
+
+    // Data classes for training data conversion
+    public class BinaryClassificationTrainingData
+    {
+        [VectorType]
+        public float[] Features { get; set; } = Array.Empty<float>();
+        
+        public bool Label { get; set; }
+    }
+
+    public class MultiClassTrainingData
+    {
+        [VectorType]
+        public float[] Features { get; set; } = Array.Empty<float>();
+        
+        public uint Label { get; set; }
+    }
+
+    public class RegressionTrainingData
+    {
+        [VectorType]
+        public float[] Features { get; set; } = Array.Empty<float>();
+        
+        public float Label { get; set; }
     }
 }

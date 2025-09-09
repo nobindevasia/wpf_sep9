@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -38,6 +38,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             
             DetectOutliersCommand = new AsyncRelayCommand(async _ => await DetectOutliersAsync());
             RemoveOutliersCommand = new AsyncRelayCommand(async _ => await RemoveOutliersAsync(), _ => CanRemoveOutliers());
+            SelectAllColumnsCommand = new RelayCommand(_ => SelectAllColumns(), _ => SummaryResults.Any());
+            DeselectAllColumnsCommand = new RelayCommand(_ => DeselectAllColumns(), _ => SummaryResults.Any());
         }
 
         #region Properties
@@ -110,6 +112,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         public ICommand DetectOutliersCommand { get; }
         public ICommand RemoveOutliersCommand { get; }
+        public ICommand SelectAllColumnsCommand { get; }
+        public ICommand DeselectAllColumnsCommand { get; }
 
         #endregion
 
@@ -119,6 +123,14 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         {
             _dataTable = dataTable;
             _targetColumn = targetColumn;
+            
+            // Validate target column exists if specified
+            if (!string.IsNullOrEmpty(_targetColumn) && _dataTable != null && !_dataTable.Columns.Contains(_targetColumn))
+            {
+                _dialogService.ShowErrorDialog($"Target column '{_targetColumn}' not found in dataset. Available columns: {string.Join(", ", _dataTable.Columns.Cast<DataColumn>().Select(c => c.ColumnName))}", "Target Column Error");
+                _targetColumn = null; // Reset invalid target column
+            }
+            
             UpdateAvailableColumns();
         }
 
@@ -130,6 +142,22 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public bool HasOutliersBeenRemoved()
         {
             return RemoveOutliersEnabled;
+        }
+
+        public void SelectAllColumns()
+        {
+            foreach (var summary in SummaryResults)
+            {
+                summary.IsSelectedForRemoval = true;
+            }
+        }
+
+        public void DeselectAllColumns()
+        {
+            foreach (var summary in SummaryResults)
+            {
+                summary.IsSelectedForRemoval = false;
+            }
         }
 
         #endregion
@@ -473,24 +501,149 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 return;
             }
 
+            // Get selected columns for outlier removal
+            var selectedColumns = SummaryResults
+                .Where(s => s.IsSelectedForRemoval)
+                .Select(s => s.ColumnName)
+                .ToHashSet();
+
+            if (!selectedColumns.Any())
+            {
+                _dialogService.ShowInfoDialog("Please select at least one column for outlier removal.", "No Columns Selected");
+                return;
+            }
+
             try
             {
                 IsAnalyzing = true;
-                AnalysisMessage = "Removing outliers from dataset...";
+                AnalysisMessage = "Analyzing selected columns for outlier removal...";
 
                 await Task.Delay(100);
 
-                // Get unique row indices of outliers to remove
-                var rowIndicesToRemove = OutlierResults
-                    .Select(r => r.RowIndex)
-                    .Distinct()
-                    .OrderByDescending(i => i) // Remove from end to start to maintain indices
+                // STEP 1: Check what columns exist
+                Console.WriteLine("=== SELECTIVE OUTLIER REMOVAL ===");
+                Console.WriteLine($"Selected columns: {string.Join(", ", selectedColumns)}");
+                Console.WriteLine($"DataTable Columns ({_dataTable.Columns.Count}):");
+                foreach (DataColumn col in _dataTable.Columns)
+                {
+                    Console.WriteLine($"  - {col.ColumnName} ({col.DataType.Name})");
+                }
+
+                Console.WriteLine($"Target Column Name: '{_targetColumn}'");
+                Console.WriteLine($"Target Column Exists: {!string.IsNullOrEmpty(_targetColumn) && _dataTable.Columns.Contains(_targetColumn)}");
+
+                // STEP 2: Analyze the target column specifically
+                var targetValueCounts = new Dictionary<string, int>();
+                int nullCount = 0;
+
+                if (!string.IsNullOrEmpty(_targetColumn))
+                {
+                    var targetCol = _dataTable.Columns[_targetColumn];
+                    Console.WriteLine($"Target Column Type: {targetCol.DataType.Name}");
+
+                    // Count all unique values in target column
+                    foreach (DataRow row in _dataTable.Rows)
+                    {
+                        var value = row[_targetColumn];
+                        if (value == null || value == DBNull.Value)
+                        {
+                            nullCount++;
+                        }
+                        else
+                        {
+                            var stringValue = value.ToString();
+                            targetValueCounts[stringValue] = targetValueCounts.ContainsKey(stringValue)
+                                ? targetValueCounts[stringValue] + 1 : 1;
+                        }
+                    }
+
+                    Console.WriteLine($"Target column distribution (before removal):");
+                    Console.WriteLine($"  NULL/DBNull values: {nullCount}");
+                    foreach (var kvp in targetValueCounts.OrderByDescending(x => x.Value))
+                    {
+                        Console.WriteLine($"  '{kvp.Key}': {kvp.Value:N0} samples");
+                    }
+                }
+
+                // STEP 3: Filter outliers to only those from selected columns
+                var selectedOutliers = OutlierResults
+                    .Where(r => selectedColumns.Contains(r.ColumnName))
                     .ToList();
 
+                var rowIndicesToRemove = selectedOutliers
+                    .Select(r => r.RowIndex)
+                    .Distinct()
+                    .OrderBy(i => i)
+                    .ToList();
+
+                Console.WriteLine($"Selected columns outliers: {selectedOutliers.Count:N0}");
+                Console.WriteLine($"Total rows to remove: {rowIndicesToRemove.Count:N0}");
+                Console.WriteLine($"Original dataset size: {_dataTable.Rows.Count:N0}");
+                Console.WriteLine($"Percentage to remove: {(double)rowIndicesToRemove.Count / _dataTable.Rows.Count * 100:F2}%");
+
+                // STEP 4: Check what target values are being removed
+                var removedTargetValues = new Dictionary<string, int>();
+                int removedNulls = 0;
+
+                if (!string.IsNullOrEmpty(_targetColumn))
+                {
+                    foreach (var rowIndex in rowIndicesToRemove.Take(100))
+                    {
+                        if (rowIndex >= 0 && rowIndex < _dataTable.Rows.Count)
+                        {
+                            var value = _dataTable.Rows[rowIndex][_targetColumn];
+                            if (value == null || value == DBNull.Value)
+                            {
+                                removedNulls++;
+                            }
+                            else
+                            {
+                                var stringValue = value.ToString();
+                                removedTargetValues[stringValue] = removedTargetValues.ContainsKey(stringValue)
+                                    ? removedTargetValues[stringValue] + 1 : 1;
+                            }
+                        }
+                    }
+                }
+
+                Console.WriteLine($"Target values being removed (first 100 outliers):");
+                Console.WriteLine($"  NULL values: {removedNulls}");
+                foreach (var kvp in removedTargetValues)
+                {
+                    Console.WriteLine($"  '{kvp.Key}': {kvp.Value} samples");
+                }
+
+                // STEP 5: Ask user for confirmation before proceeding
+                var warningMessage = $"SELECTIVE OUTLIER REMOVAL:\n\n" +
+                                   $"Selected columns: {string.Join(", ", selectedColumns)}\n\n" +
+                                   $"Dataset size: {_dataTable.Rows.Count:N0} rows\n" +
+                                   $"Outliers to remove: {rowIndicesToRemove.Count:N0} rows ({(double)rowIndicesToRemove.Count / _dataTable.Rows.Count * 100:F2}%)\n\n";
+
+                if (!string.IsNullOrEmpty(_targetColumn))
+                {
+                    warningMessage += $"Target column: '{_targetColumn}'\n" +
+                                    $"Current class distribution:\n" +
+                                    string.Join("\n", targetValueCounts.Select(kvp => $"  {kvp.Key}: {kvp.Value:N0} samples")) +
+                                    (nullCount > 0 ? $"\n  NULL: {nullCount:N0} samples" : "") +
+                                    "\n\n";
+                }
+
+                warningMessage += $"Do you want to proceed with selective outlier removal?\n\n" +
+                                $"⚠️ Large percentage removal may cause class imbalance issues!";
+
+                if (!_dialogService.ShowConfirmationDialog(warningMessage, "Confirm Selective Outlier Removal"))
+                {
+                    IsAnalyzing = false;
+                    AnalysisMessage = string.Empty;
+                    return;
+                }
+
+                AnalysisMessage = "Removing outliers from selected columns...";
+
+                // STEP 6: Proceed with removal (in descending order to maintain indices)
                 var originalRowCount = _dataTable.Rows.Count;
 
-                // Remove rows from DataTable
-                foreach (var rowIndex in rowIndicesToRemove)
+                foreach (var rowIndex in rowIndicesToRemove.OrderByDescending(i => i))
                 {
                     if (rowIndex >= 0 && rowIndex < _dataTable.Rows.Count)
                     {
@@ -501,23 +654,91 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 var newRowCount = _dataTable.Rows.Count;
                 var removedCount = originalRowCount - newRowCount;
 
-                // Clear results since they're no longer valid
-                OutlierResults.Clear();
-                SummaryResults.Clear();
+                // STEP 7: Verify final distribution
+                var finalTargetValueCounts = new Dictionary<string, int>();
+                int finalNullCount = 0;
 
-                // Update the flag
+                if (!string.IsNullOrEmpty(_targetColumn))
+                {
+                    foreach (DataRow row in _dataTable.Rows)
+                    {
+                        var value = row[_targetColumn];
+                        if (value == null || value == DBNull.Value)
+                        {
+                            finalNullCount++;
+                        }
+                        else
+                        {
+                            var stringValue = value.ToString();
+                            finalTargetValueCounts[stringValue] = finalTargetValueCounts.ContainsKey(stringValue)
+                                ? finalTargetValueCounts[stringValue] + 1 : 1;
+                        }
+                    }
+                }
+
+                Console.WriteLine($"Final target column distribution (after removal):");
+                Console.WriteLine($"  NULL/DBNull values: {finalNullCount}");
+                foreach (var kvp in finalTargetValueCounts.OrderByDescending(x => x.Value))
+                {
+                    Console.WriteLine($"  '{kvp.Key}': {kvp.Value:N0} samples");
+                }
+
+                // Clear only the outlier results, keep summary but update the removed columns
+                OutlierResults.Clear();
+                foreach (var summary in SummaryResults.Where(s => selectedColumns.Contains(s.ColumnName)))
+                {
+                    summary.OutlierCount = 0;
+                    summary.OutlierPercentage = 0;
+                    summary.Status = "Cleaned";
+                    summary.IsSelectedForRemoval = false;
+                }
                 RemoveOutliersEnabled = true;
 
-                _dialogService.ShowInfoDialog(
-                    $"Successfully removed {removedCount} rows containing outliers.\n\n" +
-                    $"Original dataset: {originalRowCount} rows\n" +
-                    $"Cleaned dataset: {newRowCount} rows\n\n" +
-                    $"The cleaned dataset will be used for training.",
-                    "Outliers Removed");
+                // Create detailed result message
+                string resultMessage = $"Selective outlier removal completed:\n\n" +
+                                      $"Selected columns: {string.Join(", ", selectedColumns)}\n" +
+                                      $"Original dataset: {originalRowCount:N0} rows\n" +
+                                      $"Cleaned dataset: {newRowCount:N0} rows\n" +
+                                      $"Removed: {removedCount:N0} rows\n\n";
+
+                if (!string.IsNullOrEmpty(_targetColumn))
+                {
+                    resultMessage += $"Final Label Distribution:\n";
+
+                    if (finalTargetValueCounts.Any())
+                    {
+                        resultMessage += string.Join("\n", finalTargetValueCounts.Select(kvp => $"  {kvp.Key}: {kvp.Value:N0} samples"));
+                    }
+                    else
+                    {
+                        resultMessage += "  ⚠️ NO CLASS SAMPLES REMAINING!";
+                    }
+
+                    if (finalNullCount > 0)
+                    {
+                        resultMessage += $"\n  NULL: {finalNullCount:N0} samples";
+                    }
+
+                    // Add warnings if classes are missing
+                    bool hasClass0 = finalTargetValueCounts.ContainsKey("0") || finalTargetValueCounts.ContainsKey("False");
+                    bool hasClass1 = finalTargetValueCounts.ContainsKey("1") || finalTargetValueCounts.ContainsKey("True");
+
+                    if (!hasClass0 || !hasClass1)
+                    {
+                        resultMessage += "\n\n⚠️ WARNING: Missing class data may cause training errors!";
+                    }
+
+                    resultMessage += "\n\n";
+                }
+
+                resultMessage += "The cleaned dataset will be used for training.";
+
+                _dialogService.ShowInfoDialog(resultMessage, "Selective Outliers Removed");
             }
             catch (Exception ex)
             {
                 _dialogService.ShowErrorDialog($"Error removing outliers: {ex.Message}", "Error");
+                Console.WriteLine($"Outlier removal error: {ex}");
             }
             finally
             {
@@ -525,7 +746,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 AnalysisMessage = string.Empty;
             }
         }
-
 
         #endregion
 
@@ -568,8 +788,10 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public string Severity { get; set; } = string.Empty;
     }
 
-    public class OutlierSummaryResult
+    public class OutlierSummaryResult : INotifyPropertyChanged
     {
+        private bool _isSelectedForRemoval = true;
+
         public string ColumnName { get; set; } = string.Empty;
         public int TotalValues { get; set; }
         public int OutlierCount { get; set; }
@@ -581,6 +803,23 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public int ExtremeSeverityCount { get; set; }
         public double MaxScore { get; set; }
         public string Status { get; set; } = string.Empty;
+        
+        public bool IsSelectedForRemoval
+        {
+            get => _isSelectedForRemoval;
+            set
+            {
+                _isSelectedForRemoval = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 
     public class OutlierInfo

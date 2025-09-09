@@ -121,10 +121,26 @@
                 <!-- Summary Tab -->
                 <TabItem Header="Summary by Column">
                     <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        
+                        <!-- Selection Controls -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5" 
+                                   Visibility="{Binding SummaryResults.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=Inverse}">
+                            <Button Content="Select All" Command="{Binding SelectAllColumnsCommand}" 
+                                    Width="80" Height="25" Margin="0,0,5,0"/>
+                            <Button Content="Deselect All" Command="{Binding DeselectAllColumnsCommand}" 
+                                    Width="80" Height="25" Margin="0,0,5,0"/>
+                            <TextBlock Text="Check columns to remove outliers from" 
+                                      VerticalAlignment="Center" Margin="10,0,0,0" 
+                                      FontStyle="Italic" Foreground="Gray"/>
+                        </StackPanel>
+                        
                         <!-- Summary DataGrid -->
-                        <DataGrid ItemsSource="{Binding SummaryResults}" 
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding SummaryResults}" 
                                   AutoGenerateColumns="False" 
-                                  IsReadOnly="True"
                                   GridLinesVisibility="Horizontal"
                                   HeadersVisibility="Column"
                                   CanUserAddRows="False"
@@ -133,6 +149,7 @@
                                   CanUserResizeColumns="True"
                                   CanUserSortColumns="True">
                             <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="Remove" Binding="{Binding IsSelectedForRemoval, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
                                 <DataGridTextColumn Header="Column" Binding="{Binding ColumnName}" Width="120"/>
                                 <DataGridTextColumn Header="Total Values" Binding="{Binding TotalValues}" Width="80"/>
                                 <DataGridTextColumn Header="Outliers" Binding="{Binding OutlierCount}" Width="70"/>
@@ -166,6 +183,10 @@
                                                                 <Setter Property="Foreground" Value="DarkRed"/>
                                                                 <Setter Property="FontWeight" Value="Bold"/>
                                                             </Trigger>
+                                                            <Trigger Property="Text" Value="Cleaned">
+                                                                <Setter Property="Foreground" Value="Blue"/>
+                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                            </Trigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
@@ -177,7 +198,7 @@
                         </DataGrid>
 
                         <!-- No Results Message -->
-                        <TextBlock Text="No analysis results. Click 'Analyze All Columns' to start." 
+                        <TextBlock Grid.Row="1" Text="No analysis results. Click 'Analyze All Columns' to start." 
                                    HorizontalAlignment="Center" 
                                    VerticalAlignment="Center"
                                    FontSize="14" 

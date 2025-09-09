@@ -145,147 +145,255 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
             var cleanedDataTable = _outlierDetectionViewModel.GetCleanedDataTable()!;
             
-            // Create a simple wrapper that properly converts DataTable to IDataView
-            var dataView = CreateDataViewFromDataTable(mlContext, cleanedDataTable, featureColumns.ToArray(), targetColumn, modelType);
-            
-            return dataView;
-        }
-
-        private IDataView CreateDataViewFromDataTable(MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetColumn, ModelType modelType)
-        {
-            // Use ML.NET's built-in database loader functionality by creating a temporary connection
-            // This is more reliable than manual conversion and avoids row multiplication
-            
-            // Create column definitions for the database loader
-            var loaderColumns = new List<DatabaseLoader.Column>();
-            
-            int idx = 0;
-            foreach (var featureColumn in featureColumns)
+            // Validate that all required columns exist
+            var featureColumnsList = featureColumns.ToList();
+            var missingColumns = featureColumnsList.Where(col => !cleanedDataTable.Columns.Contains(col)).ToList();
+            if (missingColumns.Any())
             {
-                loaderColumns.Add(new DatabaseLoader.Column(
-                    name: featureColumn,
-                    dbType: DbType.Single,
-                    index: idx++
-                ));
+                Console.WriteLine($"Warning: Missing feature columns: {string.Join(", ", missingColumns)}");
+                featureColumnsList = featureColumnsList.Where(col => cleanedDataTable.Columns.Contains(col)).ToList();
             }
 
-            // Add target column
-            DbType labelDbType = modelType switch
+            if (!cleanedDataTable.Columns.Contains(targetColumn))
             {
-                ModelType.BinaryClassification => DbType.Int64,
-                ModelType.MultiClassClassification => DbType.Int64,
-                ModelType.Regression => DbType.Single,
-                _ => DbType.Int64
-            };
-            
-            loaderColumns.Add(new DatabaseLoader.Column(
-                name: targetColumn,
-                dbType: labelDbType,
-                index: idx
-            ));
+                Console.WriteLine($"Error: Target column '{targetColumn}' not found in cleaned data");
+                return null;
+            }
 
-            // Create IDataView from enumerable - this is the safest approach
-            var mlDataRows = ConvertDataTableToMLSafe(dataTable, featureColumns, targetColumn, modelType);
-            return mlContext.Data.LoadFromEnumerable(mlDataRows);
+            // Create the proper data view based on model type
+            try
+            {
+                switch (modelType)
+                {
+                    case ModelType.BinaryClassification:
+                        return CreateBinaryClassificationDataView(mlContext, cleanedDataTable, featureColumnsList.ToArray(), targetColumn);
+                    
+                    case ModelType.MultiClassClassification:
+                        return CreateMultiClassDataView(mlContext, cleanedDataTable, featureColumnsList.ToArray(), targetColumn);
+                    
+                    case ModelType.Regression:
+                        return CreateRegressionDataView(mlContext, cleanedDataTable, featureColumnsList.ToArray(), targetColumn);
+                    
+                    default:
+                        throw new ArgumentException($"Unsupported model type: {modelType}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error converting DataTable to IDataView: {ex.Message}");
+                return null;
+            }
         }
 
-        private IEnumerable<MLDataRow> ConvertDataTableToMLSafe(DataTable dataTable, string[] featureColumns, string targetColumn, ModelType modelType)
+        private IDataView CreateBinaryClassificationDataView(MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetColumn)
         {
-            // Validate input
-            if (dataTable == null || !featureColumns.Any())
-                yield break;
-
+            var dataPoints = new List<BinaryClassificationDataPoint>();
+            
             foreach (DataRow row in dataTable.Rows)
             {
-                var mlRow = new MLDataRow();
-                
-                // Create features array - ONE row per DataTable row
-                var features = new float[featureColumns.Length];
-                bool validRow = true;
-                
-                for (int i = 0; i < featureColumns.Length; i++)
+                try
                 {
-                    var columnName = featureColumns[i];
-                    if (dataTable.Columns.Contains(columnName) && row[columnName] != DBNull.Value)
+                    // Extract features
+                    var features = new float[featureColumns.Length];
+                    bool validRow = true;
+                    
+                    for (int i = 0; i < featureColumns.Length; i++)
                     {
-                        if (float.TryParse(row[columnName].ToString(), out float value))
+                        var value = row[featureColumns[i]];
+                        if (value == null || value == DBNull.Value)
                         {
-                            features[i] = value;
+                            features[i] = 0f; // Handle missing values
+                        }
+                        else if (float.TryParse(value.ToString(), out float floatValue))
+                        {
+                            features[i] = floatValue;
                         }
                         else
                         {
-                            validRow = false;
-                            break;
+                            features[i] = 0f; // Handle non-numeric values
                         }
                     }
-                    else
+
+                    // Extract label
+                    var labelValue = row[targetColumn];
+                    bool label = false;
+                    
+                    if (labelValue != null && labelValue != DBNull.Value)
                     {
-                        features[i] = 0f; // Default for missing values
+                        var labelStr = labelValue.ToString().ToLower();
+                        label = labelStr == "1" || labelStr == "true" || labelStr == "yes";
+                    }
+
+                    if (validRow)
+                    {
+                        dataPoints.Add(new BinaryClassificationDataPoint
+                        {
+                            Features = features,
+                            Label = label
+                        });
                     }
                 }
-
-                if (!validRow) continue;
-
-                mlRow.Features = features;
-
-                // Set target value
-                if (dataTable.Columns.Contains(targetColumn) && row[targetColumn] != DBNull.Value)
+                catch (Exception ex)
                 {
-                    switch (modelType)
-                    {
-                        case ModelType.BinaryClassification:
-                        case ModelType.MultiClassClassification:
-                            if (long.TryParse(row[targetColumn].ToString(), out long labelValue))
-                                mlRow.Label = labelValue;
-                            break;
-                        case ModelType.Regression:
-                            if (float.TryParse(row[targetColumn].ToString(), out float labelFloat))
-                                mlRow.LabelFloat = labelFloat;
-                            break;
-                    }
+                    Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
+                    continue;
                 }
-
-                yield return mlRow;
             }
+
+            if (!dataPoints.Any())
+            {
+                Console.WriteLine("Error: No valid data points created");
+                return null;
+            }
+
+            // Create schema definition
+            var schemaDefinition = SchemaDefinition.Create(typeof(BinaryClassificationDataPoint));
+            schemaDefinition[nameof(BinaryClassificationDataPoint.Features)].ColumnType = 
+                new VectorDataViewType(NumberDataViewType.Single, featureColumns.Length);
+
+            Console.WriteLine($"Created binary classification data view with {dataPoints.Count} rows and {featureColumns.Length} features");
+            
+            return mlContext.Data.LoadFromEnumerable(dataPoints, schemaDefinition);
         }
 
-        private IEnumerable<MLDataRow> ConvertDataTableToML(DataTable dataTable, IEnumerable<string> featureColumns, string targetColumn, ModelType modelType)
+        private IDataView CreateMultiClassDataView(MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetColumn)
         {
-            var featureColumnsList = featureColumns.ToList();
+            var dataPoints = new List<MultiClassDataPoint>();
             
             foreach (DataRow row in dataTable.Rows)
             {
-                var mlRow = new MLDataRow();
-                
-                // Add feature columns
-                var features = new float[featureColumnsList.Count];
-                for (int i = 0; i < featureColumnsList.Count; i++)
+                try
                 {
-                    var columnName = featureColumnsList[i];
-                    if (dataTable.Columns.Contains(columnName) && row[columnName] != DBNull.Value)
+                    var features = new float[featureColumns.Length];
+                    bool validRow = true;
+                    
+                    for (int i = 0; i < featureColumns.Length; i++)
                     {
-                        features[i] = Convert.ToSingle(row[columnName]);
+                        var value = row[featureColumns[i]];
+                        if (value == null || value == DBNull.Value)
+                        {
+                            features[i] = 0f;
+                        }
+                        else if (float.TryParse(value.ToString(), out float floatValue))
+                        {
+                            features[i] = floatValue;
+                        }
+                        else
+                        {
+                            features[i] = 0f;
+                        }
+                    }
+
+                    var labelValue = row[targetColumn];
+                    uint label = 0;
+                    
+                    if (labelValue != null && labelValue != DBNull.Value)
+                    {
+                        if (uint.TryParse(labelValue.ToString(), out uint parsedLabel))
+                        {
+                            label = parsedLabel;
+                        }
+                    }
+
+                    if (validRow)
+                    {
+                        dataPoints.Add(new MultiClassDataPoint
+                        {
+                            Features = features,
+                            Label = label
+                        });
                     }
                 }
-                mlRow.Features = features;
-
-                // Add target column
-                if (dataTable.Columns.Contains(targetColumn) && row[targetColumn] != DBNull.Value)
+                catch (Exception ex)
                 {
-                    switch (modelType)
-                    {
-                        case ModelType.BinaryClassification:
-                        case ModelType.MultiClassClassification:
-                            mlRow.Label = Convert.ToInt64(row[targetColumn]);
-                            break;
-                        case ModelType.Regression:
-                            mlRow.LabelFloat = Convert.ToSingle(row[targetColumn]);
-                            break;
-                    }
+                    Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
+                    continue;
                 }
-
-                yield return mlRow;
             }
+
+            if (!dataPoints.Any())
+            {
+                Console.WriteLine("Error: No valid data points created");
+                return null;
+            }
+
+            var schemaDefinition = SchemaDefinition.Create(typeof(MultiClassDataPoint));
+            schemaDefinition[nameof(MultiClassDataPoint.Features)].ColumnType = 
+                new VectorDataViewType(NumberDataViewType.Single, featureColumns.Length);
+
+            Console.WriteLine($"Created multi-class data view with {dataPoints.Count} rows and {featureColumns.Length} features");
+            
+            return mlContext.Data.LoadFromEnumerable(dataPoints, schemaDefinition);
+        }
+
+        private IDataView CreateRegressionDataView(MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetColumn)
+        {
+            var dataPoints = new List<RegressionDataPoint>();
+            
+            foreach (DataRow row in dataTable.Rows)
+            {
+                try
+                {
+                    var features = new float[featureColumns.Length];
+                    bool validRow = true;
+                    
+                    for (int i = 0; i < featureColumns.Length; i++)
+                    {
+                        var value = row[featureColumns[i]];
+                        if (value == null || value == DBNull.Value)
+                        {
+                            features[i] = 0f;
+                        }
+                        else if (float.TryParse(value.ToString(), out float floatValue))
+                        {
+                            features[i] = floatValue;
+                        }
+                        else
+                        {
+                            features[i] = 0f;
+                        }
+                    }
+
+                    var labelValue = row[targetColumn];
+                    float label = 0f;
+                    
+                    if (labelValue != null && labelValue != DBNull.Value)
+                    {
+                        if (float.TryParse(labelValue.ToString(), out float parsedLabel))
+                        {
+                            label = parsedLabel;
+                        }
+                    }
+
+                    if (validRow)
+                    {
+                        dataPoints.Add(new RegressionDataPoint
+                        {
+                            Features = features,
+                            Label = label
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
+                    continue;
+                }
+            }
+
+            if (!dataPoints.Any())
+            {
+                Console.WriteLine("Error: No valid data points created");
+                return null;
+            }
+
+            var schemaDefinition = SchemaDefinition.Create(typeof(RegressionDataPoint));
+            schemaDefinition[nameof(RegressionDataPoint.Features)].ColumnType = 
+                new VectorDataViewType(NumberDataViewType.Single, featureColumns.Length);
+
+            Console.WriteLine($"Created regression data view with {dataPoints.Count} rows and {featureColumns.Length} features");
+            
+            return mlContext.Data.LoadFromEnumerable(dataPoints, schemaDefinition);
         }
 
         #endregion
@@ -408,7 +516,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             AnalyzeFeatureTypes(dataTable);
 
             AnalyzeMissingValues(dataTable);
-            AnalyzeMissingValues(dataTable);
         }
 
         private void AnalyzeFeatureTypes(DataTable dataTable)
@@ -514,13 +621,28 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public double MissingPercentage { get; set; }
     }
 
-    public class MLDataRow
+    // Data point classes for proper ML.NET conversion
+    public class BinaryClassificationDataPoint
     {
         [VectorType]
         public float[] Features { get; set; } = Array.Empty<float>();
+        
+        public bool Label { get; set; }
+    }
 
-        public long Label { get; set; }
+    public class MultiClassDataPoint
+    {
+        [VectorType]
+        public float[] Features { get; set; } = Array.Empty<float>();
+        
+        public uint Label { get; set; }
+    }
 
-        public float LabelFloat { get; set; }
+    public class RegressionDataPoint
+    {
+        [VectorType]
+        public float[] Features { get; set; } = Array.Empty<float>();
+        
+        public float Label { get; set; }
     }
 }
