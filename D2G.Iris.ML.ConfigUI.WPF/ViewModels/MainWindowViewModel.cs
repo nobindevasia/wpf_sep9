@@ -90,7 +90,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             TrainingParameters.ModelTypeChanged += OnModelTypeChanged;
 
             InputFields.SetDependencies(() => DatabaseSettings.GetConfiguration(), () => TrainingParameters.TargetField);
-            ExploratoryDataAnalysis.SetDependencies(() => DatabaseSettings.GetConfiguration(), () => InputFields.GetConfiguration());
+            ExploratoryDataAnalysis.SetDependencies(() => DatabaseSettings.GetConfiguration(), () => InputFields.GetConfiguration(), () => TrainingParameters.TargetField);
         }
 
         private void InitializeCommands()
@@ -353,16 +353,50 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         .Select(f => f.Name)
                         .ToArray();
 
-                    var dataLoader = new DatabaseDataLoader();
-                    var rawData = dataLoader.LoadDataFromSql(
-                        sqlHandler.GetConnectionString(),
-                        config.Database.TableName,
-                        enabledFields,
-                        config.ModelType,
-                        config.TargetField,
-                        config.Database.WhereClause);
-
                     var mlContext = new Microsoft.ML.MLContext(seed: 42);
+                    Microsoft.ML.IDataView rawData;
+
+                    // Check if we have cleaned data from EDA outlier removal
+                    if (ExploratoryDataAnalysis.HasDataBeenCleaned())
+                    {
+                        rawData = ExploratoryDataAnalysis.GetCleanedDataAsIDataView(
+                            mlContext, 
+                            enabledFields, 
+                            config.TargetField, 
+                            config.ModelType);
+                        
+                        if (rawData != null)
+                        {
+                            var cleanedRowCount = ExploratoryDataAnalysis.GetCleanedDataForTraining()?.Rows.Count ?? 0;
+                            Console.WriteLine("=============== Loading Data ===============");
+                            Console.WriteLine($"Using cleaned dataset from EDA outlier removal.");
+                            Console.WriteLine($">> Loaded {cleanedRowCount} rows of cleaned data.");
+                        }
+                        else
+                        {
+                            // Fallback to original data loading
+                            var dataLoader = new DatabaseDataLoader();
+                            rawData = dataLoader.LoadDataFromSql(
+                                sqlHandler.GetConnectionString(),
+                                config.Database.TableName,
+                                enabledFields,
+                                config.ModelType,
+                                config.TargetField,
+                                config.Database.WhereClause);
+                        }
+                    }
+                    else
+                    {
+                        // Original data loading
+                        var dataLoader = new DatabaseDataLoader();
+                        rawData = dataLoader.LoadDataFromSql(
+                            sqlHandler.GetConnectionString(),
+                            config.Database.TableName,
+                            enabledFields,
+                            config.ModelType,
+                            config.TargetField,
+                            config.Database.WhereClause);
+                    }
 
                     var dataProcessor = new DataProcessor(sqlHandler);
                     var processedData = dataProcessor.ProcessData(

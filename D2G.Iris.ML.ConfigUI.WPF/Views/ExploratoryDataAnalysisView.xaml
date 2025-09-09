@@ -175,6 +175,10 @@
             <TabItem Header="Visualisation">
                 <views:VisualisationView DataContext="{Binding VisualisationViewModel}"/>
             </TabItem>
+
+            <TabItem Header="Outlier Detection">
+                <views:OutlierDetectionView DataContext="{Binding OutlierDetectionViewModel}"/>
+            </TabItem>
         </TabControl>
     </Grid>
 </UserControl>

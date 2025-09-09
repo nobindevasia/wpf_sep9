@@ -1,0 +1,246 @@
+﻿<UserControl x:Class="D2G.Iris.ML.ConfigUI.WPF.Views.OutlierDetectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:D2G.Iris.ML.ConfigUI.WPF.Converters"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+    
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+        <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+        <converters:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
+        <Style x:Key="SeverityTextBlockStyle" TargetType="TextBlock">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="Low">
+                    <Setter Property="Foreground" Value="Green"/>
+                </Trigger>
+                <Trigger Property="Text" Value="Medium">
+                    <Setter Property="Foreground" Value="Orange"/>
+                </Trigger>
+                <Trigger Property="Text" Value="High">
+                    <Setter Property="Foreground" Value="Red"/>
+                </Trigger>
+                <Trigger Property="Text" Value="Extreme">
+                    <Setter Property="Foreground" Value="DarkRed"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Configuration Panel -->
+        <GroupBox Grid.Row="0" Header="Outlier Detection Configuration" Margin="10">
+            <Grid Margin="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="120"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="120"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Method Selection -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Method:" VerticalAlignment="Center" FontWeight="Bold"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding OutlierDetectionMethods}" 
+                          SelectedItem="{Binding SelectedMethod}" Margin="5,2"/>
+
+                <!-- Z-Score Threshold (only for ZScore method) -->
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Z-Score Threshold:" VerticalAlignment="Center" FontWeight="Bold"
+                           Visibility="{Binding SelectedMethod, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=ZScore}"/>
+                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="5,2"
+                           Visibility="{Binding SelectedMethod, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=ZScore}">
+                    <TextBox Text="{Binding ZScoreThreshold, UpdateSourceTrigger=PropertyChanged}" Width="80"
+                             ToolTip="Higher thresholds reduce the number of flagged outliers (typical: 3.0)"/>
+                    <TextBlock Text="(default: 3.0)" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="Gray"/>
+                </StackPanel>
+
+                <!-- IQR Multiplier (only for IQR method) -->
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="IQR Multiplier:" VerticalAlignment="Center" FontWeight="Bold"
+                           Visibility="{Binding SelectedMethod, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=IQR}"/>
+                <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal" Margin="5,2"
+                           Visibility="{Binding SelectedMethod, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=IQR}">
+                    <TextBox Text="{Binding IQRMultiplier, UpdateSourceTrigger=PropertyChanged}" Width="80"
+                             ToolTip="Higher thresholds reduce the number of flagged outliers (typical: 1.5)"/>
+                    <TextBlock Text="(default: 1.5)" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="Gray"/>
+                </StackPanel>
+
+                <!-- Modified Z-Score Threshold (only for ModifiedZScore method) -->
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Modified Z Threshold:" VerticalAlignment="Center" FontWeight="Bold"
+                           Visibility="{Binding SelectedMethod, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=ModifiedZScore}"/>
+                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="5,2"
+                           Visibility="{Binding SelectedMethod, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=ModifiedZScore}">
+                    <TextBox Text="{Binding ModifiedZScoreThreshold, UpdateSourceTrigger=PropertyChanged}" Width="80"
+                             ToolTip="Higher thresholds reduce the number of flagged outliers (typical: 3.5)"/>
+                    <TextBlock Text="(default: 3.5)" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="Gray"/>
+                </StackPanel>
+
+                <!-- Detect Button -->
+                <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Content="Analyze All Columns" 
+                        Command="{Binding DetectOutliersCommand}" Width="140" Height="30" 
+                        HorizontalAlignment="Left" Margin="0,10,0,5"/>
+
+                <!-- Remove Outliers Button -->
+                <Button Grid.Row="2" Grid.Column="2" Content="Remove Outliers" 
+                        Command="{Binding RemoveOutliersCommand}" Width="120" Height="30" 
+                        HorizontalAlignment="Left" Margin="0,10,0,5"
+                        Background="#FFB22222" Foreground="White"
+                        ToolTip="Remove all detected outlier rows from the dataset. This will permanently modify the data used for training."/>
+
+                <!-- Loading Message -->
+                <TextBlock Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="2" Text="{Binding AnalysisMessage}" 
+                           Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"
+                           FontStyle="Italic" Foreground="Blue" Margin="10,15,0,0" VerticalAlignment="Center"/>
+
+                <!-- Status Message -->
+                <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="5" 
+                           Text="✓ Outliers have been removed from the dataset. The cleaned data will be used for training."
+                           Visibility="{Binding RemoveOutliersEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                           FontWeight="Bold" Foreground="Green" Margin="0,10,0,0" 
+                           HorizontalAlignment="Center"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Results Panel -->
+        <GroupBox Grid.Row="1" Header="Outlier Detection Results" Margin="10,0,10,10">
+            <TabControl>
+                <!-- Summary Tab -->
+                <TabItem Header="Summary by Column">
+                    <Grid>
+                        <!-- Summary DataGrid -->
+                        <DataGrid ItemsSource="{Binding SummaryResults}" 
+                                  AutoGenerateColumns="False" 
+                                  IsReadOnly="True"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  CanUserReorderColumns="True"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Column" Binding="{Binding ColumnName}" Width="120"/>
+                                <DataGridTextColumn Header="Total Values" Binding="{Binding TotalValues}" Width="80"/>
+                                <DataGridTextColumn Header="Outliers" Binding="{Binding OutlierCount}" Width="70"/>
+                                <DataGridTextColumn Header="%" Binding="{Binding OutlierPercentage, StringFormat=F2}" Width="60"/>
+                                <DataGridTextColumn Header="Low" Binding="{Binding LowSeverityCount}" Width="50"/>
+                                <DataGridTextColumn Header="Med" Binding="{Binding MediumSeverityCount}" Width="50"/>
+                                <DataGridTextColumn Header="High" Binding="{Binding HighSeverityCount}" Width="50"/>
+                                <DataGridTextColumn Header="Extreme" Binding="{Binding ExtremeSeverityCount}" Width="60"/>
+                                <DataGridTextColumn Header="Max Score" Binding="{Binding MaxScore, StringFormat=F2}" Width="80"/>
+                                <DataGridTemplateColumn Header="Status" Width="70">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Status}" 
+                                                       HorizontalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <Trigger Property="Text" Value="Good">
+                                                                <Setter Property="Foreground" Value="Green"/>
+                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                            </Trigger>
+                                                            <Trigger Property="Text" Value="Fair">
+                                                                <Setter Property="Foreground" Value="Orange"/>
+                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                            </Trigger>
+                                                            <Trigger Property="Text" Value="Poor">
+                                                                <Setter Property="Foreground" Value="Red"/>
+                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                            </Trigger>
+                                                            <Trigger Property="Text" Value="Critical">
+                                                                <Setter Property="Foreground" Value="DarkRed"/>
+                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <!-- No Results Message -->
+                        <TextBlock Text="No analysis results. Click 'Analyze All Columns' to start." 
+                                   HorizontalAlignment="Center" 
+                                   VerticalAlignment="Center"
+                                   FontSize="14" 
+                                   Foreground="Gray"
+                                   Visibility="{Binding SummaryResults.Count, Converter={StaticResource CountToVisibilityConverter}}"/>
+                    </Grid>
+                </TabItem>
+
+                <!-- Detailed Results Tab -->
+                <TabItem Header="Detailed Outliers">
+                    <Grid>
+                        <!-- Results DataGrid -->
+                        <DataGrid ItemsSource="{Binding OutlierResults}" 
+                                  AutoGenerateColumns="False" 
+                                  IsReadOnly="True"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  CanUserReorderColumns="True"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Row Index" Binding="{Binding RowIndex}" Width="80"/>
+                                <DataGridTextColumn Header="Column" Binding="{Binding ColumnName}" Width="120"/>
+                                <DataGridTextColumn Header="Value" Binding="{Binding Value, StringFormat=F4}" Width="100"/>
+                                <DataGridTextColumn Header="Score" Binding="{Binding Score, StringFormat=F4}" Width="80"/>
+                                <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="100"/>
+                                <DataGridTemplateColumn Header="Severity" Width="80">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Severity}" 
+                                                       Style="{StaticResource SeverityTextBlockStyle}"
+                                                       HorizontalAlignment="Center"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <!-- No Results Message -->
+                        <TextBlock Text="No outliers detected. Run analysis to see detailed results." 
+                                   HorizontalAlignment="Center" 
+                                   VerticalAlignment="Center"
+                                   FontSize="14" 
+                                   Foreground="Gray"
+                                   Visibility="{Binding OutlierResults.Count, Converter={StaticResource CountToVisibilityConverter}}"/>
+                    </Grid>
+                </TabItem>
+            </TabControl>
+        </GroupBox>
+
+        <!-- Loading Overlay -->
+        <Grid Grid.Row="0" Grid.RowSpan="2" Background="#80000000" 
+              Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <ProgressBar IsIndeterminate="True" Width="200" Height="20" Margin="0,0,0,20"/>
+                <TextBlock Text="{Binding AnalysisMessage}" 
+                           HorizontalAlignment="Center" 
+                           FontSize="14" 
+                           FontWeight="Medium"
+                           Foreground="White"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

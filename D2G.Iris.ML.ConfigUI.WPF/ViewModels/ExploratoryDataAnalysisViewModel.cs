@@ -8,9 +8,11 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Data.SqlClient;
 using Microsoft.ML;
+using Microsoft.ML.Data;
 using D2G.Iris.ML.ConfigUI.WPF.Commands;
 using D2G.Iris.ML.ConfigUI.WPF.Services;
 using D2G.Iris.ML.Core.Models;
+using D2G.Iris.ML.Core.Enums;
 using D2G.Iris.ML.Data;
 
 namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
@@ -26,9 +28,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         private ObservableCollection<ColumnMissingInfo> _columnMissingValues;
         private Func<DatabaseConfig>? _getDatabaseConfig;
         private Func<List<InputField>>? _getInputFields;
+        private Func<string>? _getTargetField;
         private bool _isLoading;
         private string _loadingMessage = "Loading data...";
         private VisualisationViewModel _visualisationViewModel;
+        private OutlierDetectionViewModel _outlierDetectionViewModel;
 
         public ExploratoryDataAnalysisViewModel(IDialogService dialogService)
         {
@@ -36,6 +40,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             _featureTypes = new ObservableCollection<FeatureTypeInfo>();
             _columnMissingValues = new ObservableCollection<ColumnMissingInfo>();
             _visualisationViewModel = new VisualisationViewModel(dialogService);
+            _outlierDetectionViewModel = new OutlierDetectionViewModel(dialogService);
             
             AnalyzeDataCommand = new RelayCommand(_ => AnalyzeData(), _ => CanAnalyzeData());
         }
@@ -96,6 +101,12 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             set => SetProperty(ref _visualisationViewModel, value);
         }
 
+        public OutlierDetectionViewModel OutlierDetectionViewModel
+        {
+            get => _outlierDetectionViewModel;
+            set => SetProperty(ref _outlierDetectionViewModel, value);
+        }
+
         #endregion
 
         #region Commands
@@ -106,10 +117,175 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         #region Public Methods
 
-        public void SetDependencies(Func<DatabaseConfig> getDatabaseConfig, Func<List<InputField>> getInputFields)
+        public void SetDependencies(Func<DatabaseConfig> getDatabaseConfig, Func<List<InputField>> getInputFields, Func<string>? getTargetField = null)
         {
             _getDatabaseConfig = getDatabaseConfig;
             _getInputFields = getInputFields;
+            _getTargetField = getTargetField;
+        }
+
+        public DataTable? GetCleanedDataForTraining()
+        {
+            if (_outlierDetectionViewModel.HasOutliersBeenRemoved())
+            {
+                return _outlierDetectionViewModel.GetCleanedDataTable();
+            }
+            return null;
+        }
+
+        public bool HasDataBeenCleaned()
+        {
+            return _outlierDetectionViewModel.HasOutliersBeenRemoved();
+        }
+
+        public IDataView? GetCleanedDataAsIDataView(MLContext mlContext, IEnumerable<string> featureColumns, string targetColumn, ModelType modelType)
+        {
+            if (!HasDataBeenCleaned() || _outlierDetectionViewModel.GetCleanedDataTable() == null)
+                return null;
+
+            var cleanedDataTable = _outlierDetectionViewModel.GetCleanedDataTable()!;
+            
+            // Create a simple wrapper that properly converts DataTable to IDataView
+            var dataView = CreateDataViewFromDataTable(mlContext, cleanedDataTable, featureColumns.ToArray(), targetColumn, modelType);
+            
+            return dataView;
+        }
+
+        private IDataView CreateDataViewFromDataTable(MLContext mlContext, DataTable dataTable, string[] featureColumns, string targetColumn, ModelType modelType)
+        {
+            // Use ML.NET's built-in database loader functionality by creating a temporary connection
+            // This is more reliable than manual conversion and avoids row multiplication
+            
+            // Create column definitions for the database loader
+            var loaderColumns = new List<DatabaseLoader.Column>();
+            
+            int idx = 0;
+            foreach (var featureColumn in featureColumns)
+            {
+                loaderColumns.Add(new DatabaseLoader.Column(
+                    name: featureColumn,
+                    dbType: DbType.Single,
+                    index: idx++
+                ));
+            }
+
+            // Add target column
+            DbType labelDbType = modelType switch
+            {
+                ModelType.BinaryClassification => DbType.Int64,
+                ModelType.MultiClassClassification => DbType.Int64,
+                ModelType.Regression => DbType.Single,
+                _ => DbType.Int64
+            };
+            
+            loaderColumns.Add(new DatabaseLoader.Column(
+                name: targetColumn,
+                dbType: labelDbType,
+                index: idx
+            ));
+
+            // Create IDataView from enumerable - this is the safest approach
+            var mlDataRows = ConvertDataTableToMLSafe(dataTable, featureColumns, targetColumn, modelType);
+            return mlContext.Data.LoadFromEnumerable(mlDataRows);
+        }
+
+        private IEnumerable<MLDataRow> ConvertDataTableToMLSafe(DataTable dataTable, string[] featureColumns, string targetColumn, ModelType modelType)
+        {
+            // Validate input
+            if (dataTable == null || !featureColumns.Any())
+                yield break;
+
+            foreach (DataRow row in dataTable.Rows)
+            {
+                var mlRow = new MLDataRow();
+                
+                // Create features array - ONE row per DataTable row
+                var features = new float[featureColumns.Length];
+                bool validRow = true;
+                
+                for (int i = 0; i < featureColumns.Length; i++)
+                {
+                    var columnName = featureColumns[i];
+                    if (dataTable.Columns.Contains(columnName) && row[columnName] != DBNull.Value)
+                    {
+                        if (float.TryParse(row[columnName].ToString(), out float value))
+                        {
+                            features[i] = value;
+                        }
+                        else
+                        {
+                            validRow = false;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        features[i] = 0f; // Default for missing values
+                    }
+                }
+
+                if (!validRow) continue;
+
+                mlRow.Features = features;
+
+                // Set target value
+                if (dataTable.Columns.Contains(targetColumn) && row[targetColumn] != DBNull.Value)
+                {
+                    switch (modelType)
+                    {
+                        case ModelType.BinaryClassification:
+                        case ModelType.MultiClassClassification:
+                            if (long.TryParse(row[targetColumn].ToString(), out long labelValue))
+                                mlRow.Label = labelValue;
+                            break;
+                        case ModelType.Regression:
+                            if (float.TryParse(row[targetColumn].ToString(), out float labelFloat))
+                                mlRow.LabelFloat = labelFloat;
+                            break;
+                    }
+                }
+
+                yield return mlRow;
+            }
+        }
+
+        private IEnumerable<MLDataRow> ConvertDataTableToML(DataTable dataTable, IEnumerable<string> featureColumns, string targetColumn, ModelType modelType)
+        {
+            var featureColumnsList = featureColumns.ToList();
+            
+            foreach (DataRow row in dataTable.Rows)
+            {
+                var mlRow = new MLDataRow();
+                
+                // Add feature columns
+                var features = new float[featureColumnsList.Count];
+                for (int i = 0; i < featureColumnsList.Count; i++)
+                {
+                    var columnName = featureColumnsList[i];
+                    if (dataTable.Columns.Contains(columnName) && row[columnName] != DBNull.Value)
+                    {
+                        features[i] = Convert.ToSingle(row[columnName]);
+                    }
+                }
+                mlRow.Features = features;
+
+                // Add target column
+                if (dataTable.Columns.Contains(targetColumn) && row[targetColumn] != DBNull.Value)
+                {
+                    switch (modelType)
+                    {
+                        case ModelType.BinaryClassification:
+                        case ModelType.MultiClassClassification:
+                            mlRow.Label = Convert.ToInt64(row[targetColumn]);
+                            break;
+                        case ModelType.Regression:
+                            mlRow.LabelFloat = Convert.ToSingle(row[targetColumn]);
+                            break;
+                    }
+                }
+
+                yield return mlRow;
+            }
         }
 
         #endregion
@@ -179,6 +355,12 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 await Task.Delay(200);
 
                 await _visualisationViewModel.GenerateHistogramPreviewsAsync(dataTable);
+
+                LoadingMessage = "Setting up outlier detection...";
+                await Task.Delay(100);
+
+                var targetField = _getTargetField?.Invoke();
+                _outlierDetectionViewModel.SetDataTable(dataTable, targetField);
 
                 _dialogService.ShowInfoDialog($"Data analysis completed successfully for {enabledFields.Count} enabled fields.", "Analysis Complete");
             }
@@ -330,5 +512,15 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public string ColumnName { get; set; } = string.Empty;
         public int MissingCount { get; set; }
         public double MissingPercentage { get; set; }
+    }
+
+    public class MLDataRow
+    {
+        [VectorType]
+        public float[] Features { get; set; } = Array.Empty<float>();
+
+        public long Label { get; set; }
+
+        public float LabelFloat { get; set; }
     }
 }

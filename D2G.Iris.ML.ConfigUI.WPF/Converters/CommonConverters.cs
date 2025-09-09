@@ -131,4 +131,24 @@ namespace D2G.Iris.ML.ConfigUI.WPF.Converters
             throw new NotImplementedException();
         }
     }
+
+    public class EnumToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value == null || parameter == null) return Visibility.Collapsed;
+            
+            string enumValue = value.ToString();
+            string parameterValue = parameter.ToString();
+            
+            return string.Equals(enumValue, parameterValue, StringComparison.OrdinalIgnoreCase) 
+                ? Visibility.Visible 
+                : Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }
