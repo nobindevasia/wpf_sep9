@@ -108,7 +108,7 @@
                                  Visibility="{Binding DataBalancing.IsSmoteSelected, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                         
-                        <Label Grid.Row="6" Grid.Column="0" Content="Min Ratio:" Style="{StaticResource CompactLabelStyle}"
+                        <Label Grid.Row="6" Grid.Column="0" Content="Min to Maj Ratio:" Style="{StaticResource CompactLabelStyle}"
                                Visibility="{Binding DataBalancing.IsSmoteSelected, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                         <TextBox Grid.Row="6" Grid.Column="1" 
                                  Text="{Binding DataBalancing.MinorityToMajorityRatio, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource StringToDecimalConverter}}" 

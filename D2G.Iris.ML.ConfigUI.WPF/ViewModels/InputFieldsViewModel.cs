@@ -26,6 +26,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             _dialogService = dialogService;
             _schemaLoader = new DatabaseSchemaLoader();
             InputFields = new ObservableCollection<InputFieldItem>();
+            InputFields.CollectionChanged += (s, e) => 
+            {
+                ((RelayCommand)SelectAllCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)DeselectAllCommand).RaiseCanExecuteChanged();
+            };
             InitializeCommands();
         }
 
@@ -53,6 +58,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public ICommand EditFieldCommand { get; private set; } = null!;
         public ICommand RemoveFieldCommand { get; private set; } = null!;
         public ICommand LoadFromDatabaseCommand { get; private set; } = null!;
+        public ICommand SelectAllCommand { get; private set; } = null!;
+        public ICommand DeselectAllCommand { get; private set; } = null!;
 
         #endregion
 
@@ -62,6 +69,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             EditFieldCommand = new RelayCommand(EditField, () => SelectedField != null);
             RemoveFieldCommand = new RelayCommand(RemoveField, () => SelectedField != null);
             LoadFromDatabaseCommand = new AsyncRelayCommand(LoadFromDatabase, () => !IsLoadingFromDatabase);
+            SelectAllCommand = new RelayCommand(SelectAll, () => InputFields.Any());
+            DeselectAllCommand = new RelayCommand(DeselectAll, () => InputFields.Any());
         }
 
         public void SetDependencies(Func<DatabaseConfig?> getDatabaseConfig, Func<string> getTargetField)
@@ -147,6 +156,22 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 "Confirm Removal"))
             {
                 InputFields.Remove(SelectedField);
+            }
+        }
+
+        private void SelectAll()
+        {
+            foreach (var field in InputFields)
+            {
+                field.IsEnabled = true;
+            }
+        }
+
+        private void DeselectAll()
+        {
+            foreach (var field in InputFields)
+            {
+                field.IsEnabled = false;
             }
         }
 

@@ -522,7 +522,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     
                     if (labelValue != null && labelValue != DBNull.Value)
                     {
-                        labelString = labelValue.ToString().ToLower();
+                        labelString = labelValue.ToString()?.ToLower() ?? "0";
                         label = labelString == "1" || labelString == "true" || labelString == "yes";
                     }
 
@@ -650,6 +650,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     });
                 }
                 catch (Exception ex)
+                
                 {
                     Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
                     continue;

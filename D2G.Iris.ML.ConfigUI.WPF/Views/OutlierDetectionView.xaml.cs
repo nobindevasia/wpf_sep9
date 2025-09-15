@@ -8,5 +8,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.Views
         {
             InitializeComponent();
         }
+
     }
 }

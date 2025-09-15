@@ -27,6 +27,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         private double _zScoreThreshold = 3.0;
         private double _iqrMultiplier = 1.5;
         private double _modifiedZScoreThreshold = 3.5;
+        private double _winsorLowerPercentile = 5.0;
+        private double _winsorUpperPercentile = 95.0;
+        private bool _applyWinsorization = false;
+        private bool _isApplyingWinsorization = false;
+        private string _winsorizationProgress = string.Empty;
 
         public OutlierDetectionViewModel(IDialogService dialogService)
         {
@@ -38,6 +43,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             
             DetectOutliersCommand = new AsyncRelayCommand(async _ => await DetectOutliersAsync());
             RemoveOutliersCommand = new AsyncRelayCommand(async _ => await RemoveOutliersAsync(), _ => CanRemoveOutliers());
+            ApplyWinsorizationCommand = new RelayCommand(_ => ApplyWinsorizationToData(), _ => CanRemoveOutliers());
             SelectAllColumnsCommand = new RelayCommand(_ => SelectAllColumns(), _ => SummaryResults.Any());
             DeselectAllColumnsCommand = new RelayCommand(_ => DeselectAllColumns(), _ => SummaryResults.Any());
         }
@@ -104,6 +110,44 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             set => SetProperty(ref _removeOutliersEnabled, value);
         }
 
+        public double WinsorLowerPercentile
+        {
+            get => _winsorLowerPercentile;
+            set 
+            {
+                var clampedValue = Math.Max(0.1, Math.Min(value, 99.8));
+                SetProperty(ref _winsorLowerPercentile, clampedValue);
+            }
+        }
+
+        public double WinsorUpperPercentile
+        {
+            get => _winsorUpperPercentile;
+            set 
+            { 
+                var clampedValue = Math.Max(0.2, Math.Min(value, 99.9));
+                SetProperty(ref _winsorUpperPercentile, clampedValue);
+            }
+        }
+
+        public bool ApplyWinsorization
+        {
+            get => _applyWinsorization;
+            set => SetProperty(ref _applyWinsorization, value);
+        }
+
+        public bool IsApplyingWinsorization
+        {
+            get => _isApplyingWinsorization;
+            set => SetProperty(ref _isApplyingWinsorization, value);
+        }
+
+        public string WinsorizationProgress
+        {
+            get => _winsorizationProgress;
+            set => SetProperty(ref _winsorizationProgress, value);
+        }
+
         public Array OutlierDetectionMethods => Enum.GetValues(typeof(OutlierDetectionMethod));
 
         #endregion
@@ -112,6 +156,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         public ICommand DetectOutliersCommand { get; }
         public ICommand RemoveOutliersCommand { get; }
+        public ICommand ApplyWinsorizationCommand { get; }
         public ICommand SelectAllColumnsCommand { get; }
         public ICommand DeselectAllColumnsCommand { get; }
 
@@ -157,6 +202,86 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             foreach (var summary in SummaryResults)
             {
                 summary.IsSelectedForRemoval = false;
+            }
+        }
+       
+
+        public async void ApplyWinsorizationToData()
+        {
+            if (_dataTable == null || !OutlierResults.Any())
+            {
+                _dialogService.ShowErrorDialog("No data or outliers available for winsorization.", "Error");
+                return;
+            }
+
+            var selectedColumns = SummaryResults
+                .Where(s => s.IsSelectedForRemoval)
+                .Select(s => s.ColumnName)
+                .ToHashSet();
+
+            if (!selectedColumns.Any())
+            {
+                _dialogService.ShowInfoDialog("Please select at least one column for winsorization.", "No Columns Selected");
+                return;
+            }
+
+            try
+            {
+                IsApplyingWinsorization = true;
+                WinsorizationProgress = "Applying winsorization to selected columns...";
+                await Task.Delay(100);
+
+                var transformedCount = 0;
+                var totalColumns = selectedColumns.Count;
+                var currentColumn = 0;
+
+                foreach (var columnName in selectedColumns)
+                {
+                    currentColumn++;
+                    WinsorizationProgress = $"Processing column: {columnName} ({currentColumn}/{totalColumns})...";
+                    await Task.Delay(50);
+
+                    var column = _dataTable.Columns[columnName];
+                    if (column == null || !IsNumericColumn(column)) continue;
+
+                    var values = ExtractNumericValues(column);
+                    if (values.Count < 4) continue;
+
+                    var sortedValues = values.Select(v => v.Value).OrderBy(x => x).ToList();
+                    var lowerBound = CalculatePercentile(sortedValues, WinsorLowerPercentile);
+                    var upperBound = CalculatePercentile(sortedValues, WinsorUpperPercentile);
+
+                    foreach (var value in values)
+                    {
+                        if (value.Value < lowerBound || value.Value > upperBound)
+                        {
+                            var winsorizedValue = value.Value < lowerBound ? lowerBound : upperBound;
+                            _dataTable.Rows[value.Index][columnName] = winsorizedValue;
+                            transformedCount++;
+                        }
+                    }
+                }
+
+                _dialogService.ShowInfoDialog($"Winsorization completed. {transformedCount} values were transformed.", "Winsorization Complete");
+                
+                OutlierResults.Clear();
+                foreach (var summary in SummaryResults.Where(s => selectedColumns.Contains(s.ColumnName)))
+                {
+                    summary.OutlierCount = 0;
+                    summary.OutlierPercentage = 0;
+                    summary.Status = "Winsorized";
+                    summary.IsSelectedForRemoval = false;
+                }
+                RemoveOutliersEnabled = true;
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowErrorDialog($"Error during winsorization: {ex.Message}", "Error");
+            }
+            finally
+            {
+                IsApplyingWinsorization = false;
+                WinsorizationProgress = string.Empty;
             }
         }
 
@@ -317,9 +442,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private List<ValueInfo> ExtractNumericValues(DataColumn column)
         {
-            var values = new List<ValueInfo>();
-            
-            for (int i = 0; i < _dataTable!.Rows.Count; i++)
+            var totalRows = _dataTable!.Rows.Count;
+            var values = new List<ValueInfo>(totalRows);
+
+            // Process all rows for outlier detection
+            for (int i = 0; i < totalRows; i++)
             {
                 var value = _dataTable.Rows[i][column];
                 if (value != null && value != DBNull.Value)
@@ -336,8 +463,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private List<OutlierInfo> DetectZScoreOutliers(List<ValueInfo> values)
         {
-            var outliers = new List<OutlierInfo>();
-            
+            var outliers = new List<OutlierInfo>(values.Count / 10); // Estimate ~10% outliers
+
             if (values.Count < 2) return outliers;
 
             var mean = values.Average(v => v.Value);
@@ -365,8 +492,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private List<OutlierInfo> DetectIQROutliers(List<ValueInfo> values)
         {
-            var outliers = new List<OutlierInfo>();
-            
+            var outliers = new List<OutlierInfo>(values.Count / 10); // Estimate ~10% outliers
+
             if (values.Count < 4) return outliers;
 
             var sortedValues = values.OrderBy(v => v.Value).ToList();
@@ -401,8 +528,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private List<OutlierInfo> DetectModifiedZScoreOutliers(List<ValueInfo> values)
         {
-            var outliers = new List<OutlierInfo>();
-            
+            var outliers = new List<OutlierInfo>(values.Count / 10); // Estimate ~10% outliers
+
             if (values.Count < 2) return outliers;
 
             var median = CalculateMedian(values.Select(v => v.Value).ToList());
@@ -429,6 +556,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
             return outliers;
         }
+
 
         private double CalculatePercentile(List<double> sortedValues, double percentile)
         {
@@ -513,6 +641,13 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 return;
             }
 
+            // If winsorization is selected, use the winsorization method instead
+            if (ApplyWinsorization)
+            {
+                ApplyWinsorizationToData();
+                return;
+            }
+
             try
             {
                 IsAnalyzing = true;
@@ -539,7 +674,10 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 if (!string.IsNullOrEmpty(_targetColumn))
                 {
                     var targetCol = _dataTable.Columns[_targetColumn];
-                    Console.WriteLine($"Target Column Type: {targetCol.DataType.Name}");
+                    if (targetCol != null)
+                    {
+                        Console.WriteLine($"Target Column Type: {targetCol.DataType.Name}");
+                    }
 
                     // Count all unique values in target column
                     foreach (DataRow row in _dataTable.Rows)
@@ -551,7 +689,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         }
                         else
                         {
-                            var stringValue = value.ToString();
+                            var stringValue = value.ToString() ?? string.Empty;
                             targetValueCounts[stringValue] = targetValueCounts.ContainsKey(stringValue)
                                 ? targetValueCounts[stringValue] + 1 : 1;
                         }
@@ -598,7 +736,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                             }
                             else
                             {
-                                var stringValue = value.ToString();
+                                var stringValue = value.ToString() ?? string.Empty;
                                 removedTargetValues[stringValue] = removedTargetValues.ContainsKey(stringValue)
                                     ? removedTargetValues[stringValue] + 1 : 1;
                             }
@@ -669,7 +807,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         }
                         else
                         {
-                            var stringValue = value.ToString();
+                            var stringValue = value.ToString() ?? string.Empty;
                             finalTargetValueCounts[stringValue] = finalTargetValueCounts.ContainsKey(stringValue)
                                 ? finalTargetValueCounts[stringValue] + 1 : 1;
                         }
@@ -777,7 +915,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         IQR,
         ModifiedZScore
     }
-
+    
     public class OutlierDetectionResult
     {
         public int RowIndex { get; set; }

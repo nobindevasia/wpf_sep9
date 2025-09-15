@@ -35,7 +35,8 @@
       "Read(/C:\\Users\\n.devasia\\Pictures\\Latest\\D2G.Iris.ML.ConfigUI.WPF\\Views/**)",
       "Read(/C:\\Users\\n.devasia\\Pictures\\Latest\\D2G.Iris.ML.ConfigUI.WPF\\Converters/**)",
       "Read(/C:\\Users\\n.devasia\\Pictures\\Latest\\D2G.Iris.ML.ConfigUI.WPF\\Views/**)",
-      "Read(/C:\\Users\\n.devasia\\Pictures\\Latest\\D2G.Iris.ML.ConfigUI.WPF\\Commands/**)"
+      "Read(/C:\\Users\\n.devasia\\Pictures\\Latest\\D2G.Iris.ML.ConfigUI.WPF\\Commands/**)",
+      "Read(//c/Users/n.devasia/Desktop/**)"
     ],
     "deny": [],
     "ask": []

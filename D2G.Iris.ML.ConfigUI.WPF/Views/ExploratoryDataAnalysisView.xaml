@@ -179,6 +179,88 @@
             <TabItem Header="Outlier Detection">
                 <views:OutlierDetectionView DataContext="{Binding OutlierDetectionViewModel}"/>
             </TabItem>
+
+            <TabItem Header="Correlation Heatmap">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10"
+                                Visibility="{Binding IsLoading, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                        <Button Content="Generate Correlation Matrix" Command="{Binding GenerateCorrelationCommand}"
+                                Width="180" Height="30" Margin="0,0,10,0"/>
+                        <TextBlock Text="Shows correlation between numeric features"
+                                   VerticalAlignment="Center" FontStyle="Italic" Foreground="Gray"/>
+                    </StackPanel>
+
+                    <ContentPresenter Grid.Row="1" Content="{Binding CorrelationHeatmapChart}"
+                                      Visibility="{Binding IsLoading, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                            <Ellipse x:Name="CorrelationDot1" Width="12" Height="12" Fill="#007ACC" Margin="0,0,8,0">
+                                <Ellipse.Resources>
+                                    <Storyboard x:Key="CorrelationBounceStoryboard1" RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                       From="0" To="-20" Duration="0:0:0.6"
+                                                       AutoReverse="True" BeginTime="0:0:0"/>
+                                    </Storyboard>
+                                </Ellipse.Resources>
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform/>
+                                </Ellipse.RenderTransform>
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource CorrelationBounceStoryboard1}"/>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+
+                            <Ellipse x:Name="CorrelationDot2" Width="12" Height="12" Fill="#007ACC" Margin="0,0,8,0">
+                                <Ellipse.Resources>
+                                    <Storyboard x:Key="CorrelationBounceStoryboard2" RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                       From="0" To="-20" Duration="0:0:0.6"
+                                                       AutoReverse="True" BeginTime="0:0:0.2"/>
+                                    </Storyboard>
+                                </Ellipse.Resources>
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform/>
+                                </Ellipse.RenderTransform>
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource CorrelationBounceStoryboard2}"/>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+
+                            <Ellipse x:Name="CorrelationDot3" Width="12" Height="12" Fill="#007ACC">
+                                <Ellipse.Resources>
+                                    <Storyboard x:Key="CorrelationBounceStoryboard3" RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                       From="0" To="-20" Duration="0:0:0.6"
+                                                       AutoReverse="True" BeginTime="0:0:0.4"/>
+                                    </Storyboard>
+                                </Ellipse.Resources>
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform/>
+                                </Ellipse.RenderTransform>
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource CorrelationBounceStoryboard3}"/>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding LoadingMessage}" FontSize="14" FontWeight="Medium"
+                                   HorizontalAlignment="Center" TextAlignment="Center" Foreground="#333"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
         </TabControl>
     </Grid>
 </UserControl>

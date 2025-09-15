@@ -121,7 +121,17 @@ namespace D2G.Iris.ML.ConfigUI.WPF.Converters
         {
             if (value is int count)
             {
-                return count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                // Check if parameter is "Inverse" to reverse the logic
+                bool isInverse = parameter?.ToString() == "Inverse";
+                
+                if (isInverse)
+                {
+                    return count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+                else
+                {
+                    return count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
             }
             return Visibility.Visible;
         }
@@ -138,8 +148,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.Converters
         {
             if (value == null || parameter == null) return Visibility.Collapsed;
             
-            string enumValue = value.ToString();
-            string parameterValue = parameter.ToString();
+            string? enumValue = value.ToString();
+            string? parameterValue = parameter.ToString();
             
             return string.Equals(enumValue, parameterValue, StringComparison.OrdinalIgnoreCase) 
                 ? Visibility.Visible 

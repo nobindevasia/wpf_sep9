@@ -27,6 +27,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         private string _progressMessage = string.Empty;
         private CancellationTokenSource? _cancellationTokenSource;
         private DataTable? _dataTable;
+        private string _dataInfo = string.Empty;
+        private readonly int _chunkSize = 1000;
 
         public VisualisationViewModel(IDialogService dialogService)
         {
@@ -36,6 +38,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             SelectHistogramCommand = new AsyncRelayCommand(async obj => await SelectHistogramAsync(obj as HistogramViewModel));
             BackToOverviewCommand = new RelayCommand(_ => BackToOverview());
             CancelGenerationCommand = new RelayCommand(_ => CancelGeneration());
+            GenerateHistogramsCommand = new AsyncRelayCommand(async _ => await GenerateHistogramsAsync(), _ => CanGenerateHistograms());
         }
 
         public ObservableCollection<HistogramViewModel> Histograms
@@ -59,6 +62,13 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public ICommand SelectHistogramCommand { get; }
         public ICommand BackToOverviewCommand { get; }
         public ICommand CancelGenerationCommand { get; }
+        public ICommand GenerateHistogramsCommand { get; }
+
+        public string DataInfo
+        {
+            get => _dataInfo;
+            set => SetProperty(ref _dataInfo, value);
+        }
 
         public bool IsGeneratingHistograms
         {
@@ -130,39 +140,75 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         public async Task GenerateHistogramsAsync(DataTable dataTable)
         {
+            SetDataTable(dataTable);
             await GenerateHistogramPreviewsAsync(dataTable);
+        }
+
+        public async Task GenerateHistogramsAsync()
+        {
+            if (_dataTable != null)
+            {
+                // Use already loaded data
+                await GenerateHistogramPreviewsAsync(_dataTable);
+            }
+            else
+            {
+                _dialogService.ShowErrorDialog("No data available for visualization. Please run data analysis first.", "No Data");
+            }
         }
 
         // Keep the old synchronous method for backward compatibility
         public void GenerateHistograms(DataTable dataTable)
         {
+            SetDataTable(dataTable);
             _ = GenerateHistogramPreviewsAsync(dataTable);
+        }
+
+        public void SetDataTable(DataTable dataTable)
+        {
+            _dataTable = dataTable;
+            UpdateDataInfo();
+        }
+
+
+        private bool CanGenerateHistograms()
+        {
+            return _dataTable != null && !IsGeneratingHistograms;
+        }
+
+        private void UpdateDataInfo()
+        {
+            if (_dataTable != null)
+            {
+                var numericColumns = _dataTable.Columns.Cast<DataColumn>()
+                    .Count(col => IsNumericColumn(col));
+                DataInfo = $"Data ready: {_dataTable.Rows.Count} rows, {numericColumns} numeric columns";
+            }
+            else
+            {
+                DataInfo = "No data available - run data analysis first";
+            }
         }
 
         private HistogramViewModel CreateHistogramPreview(DataColumn column, DataTable dataTable)
         {
-            // Create lightweight preview with basic info only
             var totalRows = dataTable.Rows.Count;
             var columnType = IsNumericColumn(column) ? "Numeric" : "Categorical";
             
-            // Quick sample of first 100 rows for preview info
-            var sampleSize = Math.Min(100, totalRows);
-            var nonNullCount = 0;
-            var uniqueValues = new HashSet<string>();
-            
-            for (int i = 0; i < sampleSize; i++)
+            // Create a simple preview chart with actual data
+            if (IsNumericColumn(column))
             {
-                var value = dataTable.Rows[i][column];
-                if (value != null && value != DBNull.Value)
-                {
-                    nonNullCount++;
-                    var stringValue = value.ToString();
-                    if (!string.IsNullOrWhiteSpace(stringValue))
-                    {
-                        uniqueValues.Add(stringValue);
-                    }
-                }
+                return CreateSimpleNumericPreview(column, dataTable);
             }
+            else if (column.DataType == typeof(string))
+            {
+                return CreateSimpleCategoricalPreview(column, dataTable);
+            }
+            
+            // Fallback for other types
+            var sampleSize = Math.Min(100, totalRows);
+            var dataSeries = new XyDataSeries<double, int>();
+            dataSeries.Append(0, 0); // Empty chart
             
             return new HistogramViewModel
             {
@@ -170,74 +216,193 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 ColumnType = columnType,
                 TotalCount = totalRows,
                 IsPreviewOnly = true,
+                DataSeries = dataSeries,
                 PreviewInfo = new PreviewInfo
                 {
                     SampleSize = sampleSize,
-                    NonNullCount = nonNullCount,
-                    UniqueValueCount = uniqueValues.Count,
-                    MissingCount = sampleSize - nonNullCount
+                    NonNullCount = 0,
+                    UniqueValueCount = 0,
+                    MissingCount = sampleSize
                 }
             };
         }
 
-        public async Task LoadFullHistogramAsync(HistogramViewModel preview)
+        private HistogramViewModel CreateSimpleNumericPreview(DataColumn column, DataTable dataTable)
         {
-            if (_dataTable == null || !preview.IsPreviewOnly || preview.IsLoading) return;
+            var values = new List<double>();
+            var totalRows = dataTable.Rows.Count;
+
+            // Process all data without sampling
+            for (int i = 0; i < totalRows; i++)
+            {
+                var value = dataTable.Rows[i][column];
+                if (value != null && value != DBNull.Value && double.TryParse(value.ToString(), out double numericValue))
+                {
+                    values.Add(numericValue);
+                }
+            }
+            
+            if (!values.Any())
+            {
+                var emptyDataSeries = new XyDataSeries<double, int>();
+                emptyDataSeries.Append(0, 0);
+                return new HistogramViewModel
+                {
+                    ColumnName = column.ColumnName,
+                    ColumnType = "Numeric",
+                    TotalCount = dataTable.Rows.Count,
+                    IsPreviewOnly = true,
+                    DataSeries = emptyDataSeries
+                };
+            }
+            
+            // Create simple 10-bin histogram for preview
+            var bins = 10;
+            var min = values.Min();
+            var max = values.Max();
+            var range = max - min;
+            
+            var dataSeries = new XyDataSeries<double, int>();
+            
+            if (range == 0)
+            {
+                dataSeries.Append(min, values.Count);
+            }
+            else
+            {
+                var binWidth = range / bins;
+                for (int i = 0; i < bins; i++)
+                {
+                    var binStart = min + i * binWidth;
+                    var binEnd = binStart + binWidth;
+                    var count = values.Count(v => v >= binStart && (i == bins - 1 ? v <= binEnd : v < binEnd));
+                    var binCenter = binStart + binWidth / 2;
+                    dataSeries.Append(binCenter, count);
+                }
+            }
+            
+            return new HistogramViewModel
+            {
+                ColumnName = column.ColumnName,
+                ColumnType = "Numeric",
+                TotalCount = dataTable.Rows.Count,
+                IsPreviewOnly = false,
+                DataSeries = dataSeries,
+                PreviewInfo = new PreviewInfo
+                {
+                    SampleSize = totalRows,
+                    NonNullCount = values.Count,
+                    UniqueValueCount = values.Distinct().Count(),
+                    MissingCount = totalRows - values.Count
+                }
+            };
+        }
+
+        private HistogramViewModel CreateSimpleCategoricalPreview(DataColumn column, DataTable dataTable)
+        {
+            var allValues = new List<string>();
+            var totalRows = dataTable.Rows.Count;
+
+            // Process all data without sampling
+            for (int i = 0; i < totalRows; i++)
+            {
+                var value = dataTable.Rows[i][column]?.ToString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    allValues.Add(value);
+                }
+            }
+            
+            var categoryGroups = allValues
+                .GroupBy(s => s)
+                .OrderByDescending(g => g.Count())
+                .Take(20) // Show top 20 categories (same as full histogram)
+                .ToList();
+            
+            var dataSeries = new XyDataSeries<double, int>();
+            
+            if (!categoryGroups.Any())
+            {
+                dataSeries.Append(0, 0);
+            }
+            else
+            {
+                for (int i = 0; i < categoryGroups.Count; i++)
+                {
+                    dataSeries.Append(i + 0.5, categoryGroups[i].Count());
+                }
+            }
+            
+            return new HistogramViewModel
+            {
+                ColumnName = column.ColumnName,
+                ColumnType = "Categorical",
+                TotalCount = dataTable.Rows.Count,
+                IsPreviewOnly = false,
+                DataSeries = dataSeries,
+                PreviewInfo = new PreviewInfo
+                {
+                    SampleSize = totalRows,
+                    NonNullCount = allValues.Count,
+                    UniqueValueCount = allValues.Distinct().Count(),
+                    MissingCount = totalRows - allValues.Count
+                }
+            };
+        }
+
+        public async Task LoadFullHistogramAsync(HistogramViewModel histogram)
+        {
+            if (_dataTable == null || histogram.IsLoading) return;
             
             try
             {
-                preview.IsLoading = true;
+                histogram.IsLoading = true;
                 
                 // Verify the column still exists
-                if (!_dataTable.Columns.Contains(preview.ColumnName))
+                if (!_dataTable.Columns.Contains(histogram.ColumnName))
                 {
-                    _dialogService.ShowErrorDialog($"Column '{preview.ColumnName}' no longer exists in the dataset.", "Error");
+                    _dialogService.ShowErrorDialog($"Column '{histogram.ColumnName}' no longer exists in the dataset.", "Error");
                     return;
                 }
                 
-                var column = _dataTable.Columns[preview.ColumnName];
+                var column = _dataTable.Columns[histogram.ColumnName];
                 if (column == null)
                 {
-                    _dialogService.ShowErrorDialog($"Failed to access column '{preview.ColumnName}'.", "Error");
+                    _dialogService.ShowErrorDialog($"Failed to access column '{histogram.ColumnName}'.", "Error");
                     return;
                 }
                 
-                HistogramViewModel? fullHistogram = null;
+                // Since we already have full data, just load the detailed statistics
+                HistogramViewModel? detailedHistogram = null;
                 
                 if (IsNumericColumn(column))
                 {
-                    fullHistogram = await CreateNumericHistogramAsync(column, _dataTable, CancellationToken.None);
+                    detailedHistogram = await CreateNumericHistogramAsync(column, _dataTable, CancellationToken.None);
                 }
                 else if (column.DataType == typeof(string))
                 {
-                    fullHistogram = await CreateCategoricalHistogramAsync(column, _dataTable, CancellationToken.None);
+                    detailedHistogram = await CreateCategoricalHistogramAsync(column, _dataTable, CancellationToken.None);
                 }
                 
-                if (fullHistogram != null)
+                if (detailedHistogram != null)
                 {
-                    // Copy preview properties to full histogram
-                    fullHistogram.IsSelected = preview.IsSelected;
+                    // Copy selection state and replace with detailed version
+                    detailedHistogram.IsSelected = histogram.IsSelected;
                     
-                    // Replace preview with full histogram in collection - thread-safe approach
-                    var index = Histograms.IndexOf(preview);
+                    var index = Histograms.IndexOf(histogram);
                     if (index >= 0 && index < Histograms.Count)
                     {
-                        Histograms[index] = fullHistogram;
-                    }
-                    else
-                    {
-                        // If we can't find the preview, add the full histogram
-                        Histograms.Add(fullHistogram);
+                        Histograms[index] = detailedHistogram;
                     }
                 }
             }
             catch (Exception ex)
             {
-                _dialogService.ShowErrorDialog($"Error loading histogram for {preview.ColumnName}: {ex.Message}", "Error");
+                _dialogService.ShowErrorDialog($"Error loading detailed histogram for {histogram.ColumnName}: {ex.Message}", "Error");
             }
             finally
             {
-                preview.IsLoading = false;
+                histogram.IsLoading = false;
             }
         }
 
@@ -266,30 +431,24 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var values = new List<double>();
             var allValues = new List<object?>();
             
-            // Process in chunks to be more responsive
-            const int chunkSize = 1000;
+            // Process all data without sampling
             int rowCount = dataTable.Rows.Count;
-            
-            for (int startIndex = 0; startIndex < rowCount; startIndex += chunkSize)
+
+            for (int i = 0; i < rowCount; i++)
             {
-                int endIndex = Math.Min(startIndex + chunkSize, rowCount);
-                
-                for (int i = startIndex; i < endIndex; i++)
+                var value = dataTable.Rows[i][column];
+                allValues.Add(value);
+
+                if (value != null && value != DBNull.Value)
                 {
-                    var value = dataTable.Rows[i][column];
-                    allValues.Add(value);
-                    
-                    if (value != null && value != DBNull.Value)
+                    if (double.TryParse(value.ToString(), out double numericValue))
                     {
-                        if (double.TryParse(value.ToString(), out double numericValue))
-                        {
-                            values.Add(numericValue);
-                        }
+                        values.Add(numericValue);
                     }
                 }
-                
+
                 // Yield occasionally to prevent blocking
-                if (startIndex % (chunkSize * 5) == 0)
+                if (i % _chunkSize == 0)
                 {
                     Thread.Yield();
                 }
@@ -391,21 +550,15 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             
             var allValues = new List<string?>();
             
-            // Process in chunks to be more responsive
-            const int chunkSize = 1000;
+            // Process all data without sampling
             int rowCount = dataTable.Rows.Count;
-            
-            for (int startIndex = 0; startIndex < rowCount; startIndex += chunkSize)
+
+            for (int i = 0; i < rowCount; i++)
             {
-                int endIndex = Math.Min(startIndex + chunkSize, rowCount);
-                
-                for (int i = startIndex; i < endIndex; i++)
-                {
-                    allValues.Add(dataTable.Rows[i][column]?.ToString());
-                }
-                
+                allValues.Add(dataTable.Rows[i][column]?.ToString());
+
                 // Yield occasionally to prevent blocking
-                if (startIndex % (chunkSize * 5) == 0)
+                if (i % _chunkSize == 0)
                 {
                     Thread.Yield();
                 }
@@ -582,17 +735,14 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 
                 histogram.IsSelected = true;
                 
-                // Load full histogram if it's still a preview
-                if (histogram.IsPreviewOnly)
+                // Load detailed histogram with full statistics
+                await LoadFullHistogramAsync(histogram);
+                // Get the updated histogram after loading - safer approach
+                histogram = Histograms.FirstOrDefault(h => h.ColumnName == histogram.ColumnName);
+                if (histogram == null)
                 {
-                    await LoadFullHistogramAsync(histogram);
-                    // Get the updated histogram after loading - safer approach
-                    histogram = Histograms.FirstOrDefault(h => h.ColumnName == histogram.ColumnName);
-                    if (histogram == null)
-                    {
-                        _dialogService.ShowErrorDialog("Failed to load histogram data.", "Error");
-                        return;
-                    }
+                    _dialogService.ShowErrorDialog("Failed to load histogram data.", "Error");
+                    return;
                 }
                 
                 SelectedHistogram = histogram;
