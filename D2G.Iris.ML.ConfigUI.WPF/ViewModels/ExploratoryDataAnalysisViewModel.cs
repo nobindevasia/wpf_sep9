@@ -836,19 +836,19 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             Grid.SetRow(legendPanel, 2);
             mainGrid.Children.Add(legendPanel);
 
-            var instructionText = new TextBlock
-            {
-                Text = "Mouse Controls: Wheel=Zoom | Left Drag=Select Zoom Area | Right Drag=Pan | Double Click=Fit to View | Hover=Show Values",
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 11,
-                Foreground = Brushes.Gray,
-                FontStyle = FontStyles.Italic,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(10, 5, 10, 10)
-            };
+            //var instructionText = new TextBlock
+            //{
+            //    Text = "Mouse Controls: Wheel=Zoom | Left Drag=Select Zoom Area | Right Drag=Pan | Double Click=Fit to View | Hover=Show Values",
+            //    TextWrapping = TextWrapping.Wrap,
+            //    FontSize = 11,
+            //    Foreground = Brushes.Gray,
+            //    FontStyle = FontStyles.Italic,
+            //    HorizontalAlignment = HorizontalAlignment.Center,
+            //    Margin = new Thickness(10, 5, 10, 10)
+            //};
 
-            Grid.SetRow(instructionText, 3);
-            mainGrid.Children.Add(instructionText);
+            //Grid.SetRow(instructionText, 3);
+            //mainGrid.Children.Add(instructionText);
 
             containerControl.Content = mainGrid;
             return containerControl;
