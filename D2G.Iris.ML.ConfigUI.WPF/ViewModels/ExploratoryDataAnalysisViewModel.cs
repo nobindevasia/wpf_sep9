@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
@@ -184,7 +184,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
             var cleanedDataTable = _outlierDetectionViewModel.GetCleanedDataTable()!;
             
-            // Validate that all required columns exist
+            
             var featureColumnsList = featureColumns.ToList();
             var missingColumns = featureColumnsList.Where(col => !cleanedDataTable.Columns.Contains(col)).ToList();
             if (missingColumns.Any())
@@ -199,7 +199,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 return null;
             }
 
-            // Create the proper data view based on model type
+            
             try
             {
                 switch (modelType)
@@ -232,7 +232,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             {
                 try
                 {
-                    // Extract features
+                    
                     var features = new float[featureColumns.Length];
                     bool validRow = true;
                     
@@ -241,7 +241,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         var value = row[featureColumns[i]];
                         if (value == null || value == DBNull.Value)
                         {
-                            features[i] = 0f; // Handle missing values
+                            features[i] = 0f; 
                         }
                         else if (float.TryParse(value.ToString(), out float floatValue))
                         {
@@ -249,11 +249,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         }
                         else
                         {
-                            features[i] = 0f; // Handle non-numeric values
+                            features[i] = 0f; 
                         }
                     }
 
-                    // Extract label
+                    
                     var labelValue = row[targetColumn];
                     bool label = false;
                     
@@ -279,7 +279,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 }
             }
 
-            // Create schema definition
+            
             var schemaDefinition = SchemaDefinition.Create(typeof(BinaryClassificationDataPoint));
 
             if (!dataPoints.Any())
@@ -462,7 +462,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     return;
                 }
 
-                // Calculate correlation matrix on background thread
+                
                 var correlationData = await Task.Run(() =>
                 {
                     var numericColumns = GetNumericColumns(_currentDataTable);
@@ -474,7 +474,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     return (numericColumns, correlationMatrix);
                 });
 
-                // Create UI components on main thread
+                
                 UserControl correlationChart;
                 if (correlationData.Item2 == null)
                 {
@@ -610,8 +610,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             return denominator == 0 ? 0.0 : numerator / denominator;
         }
 
-        // Replace the existing FeatureNameLabelProvider and ReversedFeatureNameLabelProvider classes
-        // in ExploratoryDataAnalysisViewModel.cs with these corrected versions:
+        
+        
 
         public class FeatureNameLabelProvider : LabelProviderBase
         {
@@ -626,13 +626,13 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             {
                 try
                 {
-                    // Map tick at k-0.5 to index k, but reverse to match Y-axis
+                    
                     int index = (int)Math.Floor(Convert.ToDouble(dataValue) + 0.5);
-                    // Reverse the index to align with flipped Y-axis
+                    
                     int reversedIndex = featureNames.Length - 1 - index;
                     if (reversedIndex >= 0 && reversedIndex < featureNames.Length)
                     {
-                        // Truncate long feature names for better display
+                        
                         string name = featureNames[reversedIndex];
                         return name.Length > 12 ? name.Substring(0, 12) + "..." : name;
                     }
@@ -649,10 +649,10 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 try
                 {
                     int index = (int)Math.Floor(Convert.ToDouble(dataValue) + 0.5);
-                    // Reverse the index to align with flipped Y-axis
+                    
                     int reversedIndex = featureNames.Length - 1 - index;
                     if (reversedIndex >= 0 && reversedIndex < featureNames.Length)
-                        return featureNames[reversedIndex]; // Full name in cursor tooltip
+                        return featureNames[reversedIndex]; 
                     return string.Empty;
                 }
                 catch
@@ -662,7 +662,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             }
         }
 
-        // For Y-Axis when FlipCoordinates = true to align names with grid rows top-to-bottom
+        
         public class ReversedFeatureNameLabelProvider : LabelProviderBase
         {
             private readonly string[] featureNames;
@@ -733,7 +733,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             Grid.SetRow(titleBlock, 0);
             mainGrid.Children.Add(titleBlock);
 
-            // Create SciChart heatmap with optimal size for zoom interactions
+            
             var sciChartSurface = new SciChartSurface
             {
                 Height = 650,
@@ -743,10 +743,10 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 Padding = new Thickness(10)
             };
 
-            // Create heatmap data series using the correct API from SciChart example
+            
             var heatmapDataSeries = new UniformHeatmapDataSeries<int, int, double>(correlationMatrix, 0, 1, 0, 1);
 
-            // Create a heatmap renderable series using FastUniformHeatmapRenderableSeries
+            
             var heatmapSeries = new FastUniformHeatmapRenderableSeries
             {
                 DataSeries = heatmapDataSeries,
@@ -754,26 +754,26 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 Opacity = 1.0
             };
 
-            // Create color map for correlation values (-1 to +1)
+            
             var colorMap = new HeatmapColorPalette
             {
                 Minimum = -1.0,
                 Maximum = 1.0
             };
 
-            // Add gradient stops for correlation visualization
-            colorMap.GradientStops.Add(new GradientStop(Colors.Blue, 0.0));    // -1 (strong negative)
-            colorMap.GradientStops.Add(new GradientStop(Colors.Cyan, 0.25));   // -0.5
-            colorMap.GradientStops.Add(new GradientStop(Colors.White, 0.5));   // 0 (no correlation)
-            colorMap.GradientStops.Add(new GradientStop(Colors.Yellow, 0.75)); // +0.5
-            colorMap.GradientStops.Add(new GradientStop(Colors.Red, 1.0));     // +1 (strong positive)
+            
+            colorMap.GradientStops.Add(new GradientStop(Colors.Blue, 0.0));    
+            colorMap.GradientStops.Add(new GradientStop(Colors.Cyan, 0.25));   
+            colorMap.GradientStops.Add(new GradientStop(Colors.White, 0.5));   
+            colorMap.GradientStops.Add(new GradientStop(Colors.Yellow, 0.75)); 
+            colorMap.GradientStops.Add(new GradientStop(Colors.Red, 1.0));     
 
             heatmapSeries.ColorMap = colorMap;
 
-            // Convert List<string> to string[] for the FeatureNameLabelProvider
+            
             string[] featureNames = columnNames.ToArray();
 
-            // Configure axes with custom label providers to show feature names against each grid cell (centered)
+            
             var xAxis = new NumericAxis
             {
                 AxisTitle = "Features",
@@ -782,7 +782,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 MinorDelta = 1,
                 DrawMinorTicks = false,
                 DrawMajorTicks = true,
-                DrawMajorGridLines = true,  // Enable grid lines to show feature separation
+                DrawMajorGridLines = true,  
                 DrawMinorGridLines = false,
                 DrawMajorBands = false,
                 AutoTicks = false,
@@ -798,11 +798,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 MinorDelta = 1,
                 DrawMinorTicks = false,
                 DrawMajorTicks = true,
-                DrawMajorGridLines = true,  // Enable grid lines to show feature separation
+                DrawMajorGridLines = true,  
                 DrawMinorGridLines = false,
                 DrawMajorBands = false,
                 AutoTicks = false,
-                // Use reversed provider to match flipped Y-axis so first feature is at the top row
+                
                 LabelProvider = new ReversedFeatureNameLabelProvider(featureNames),
                 AxisAlignment = AxisAlignment.Left,
                 FlipCoordinates = true
@@ -812,19 +812,19 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             sciChartSurface.YAxes.Add(yAxis);
             sciChartSurface.RenderableSeries.Add(heatmapSeries);
 
-            // Add interactive chart modifiers for zoom, pan, and mouse interactions
+            
             sciChartSurface.ChartModifier = new ModifierGroup(
-                // Mouse wheel zoom
+                
                 new MouseWheelZoomModifier(),
-                // Rubber band zoom (drag to select area to zoom)
+                
                 new RubberBandXyZoomModifier(),
-                // Double-click to zoom to extents
+                
                 new ZoomExtentsModifier(),
-                // Pan with right mouse button drag
+                
                 new ZoomPanModifier { ExecuteOn = ExecuteOn.MouseRightButton },
-                // Cursor modifier to show crosshair and values
+                
                 new CursorModifier { ShowTooltip = true, ShowAxisLabels = true },
-                // Allow dragging of axes for fine adjustment
+                
                 new XAxisDragModifier(),
                 new YAxisDragModifier()
             );
@@ -836,19 +836,19 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             Grid.SetRow(legendPanel, 2);
             mainGrid.Children.Add(legendPanel);
 
-            //var instructionText = new TextBlock
-            //{
-            //    Text = "Mouse Controls: Wheel=Zoom | Left Drag=Select Zoom Area | Right Drag=Pan | Double Click=Fit to View | Hover=Show Values",
-            //    TextWrapping = TextWrapping.Wrap,
-            //    FontSize = 11,
-            //    Foreground = Brushes.Gray,
-            //    FontStyle = FontStyles.Italic,
-            //    HorizontalAlignment = HorizontalAlignment.Center,
-            //    Margin = new Thickness(10, 5, 10, 10)
-            //};
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
 
-            //Grid.SetRow(instructionText, 3);
-            //mainGrid.Children.Add(instructionText);
+            
+            
 
             containerControl.Content = mainGrid;
             return containerControl;
@@ -871,7 +871,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 Margin = new Thickness(0, 0, 10, 0)
             });
 
-            // SciChart default heatmap colors (blue to red gradient)
+            
             var legendItems = new[]
             {
                 (Colors.Blue, "-1 (Strong Negative)"),
@@ -941,13 +941,13 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 sqlHandler.Connect(databaseConfig);
                 var connectionString = sqlHandler.GetConnectionString();
 
-                // Find this section in AnalyzeData():
+                
                 var dataTable = await Task.Run(() =>
                 {
                     var dataLoader = new DatabaseDataLoader();
                     var enabledFieldNames = enabledFields.Select(f => f.Name).ToArray();
 
-                    // ADD THESE LINES:
+                    
                     var targetField = _getTargetField?.Invoke();
                     var allFieldsForEDA = enabledFieldNames.ToList();
                     if (!string.IsNullOrEmpty(targetField) && !allFieldsForEDA.Contains(targetField))
@@ -955,11 +955,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         allFieldsForEDA.Add(targetField);
                     }
 
-                    // CHANGE THIS LINE:
+                    
                     return LoadDataTableFromSql(
                         connectionString,
                         databaseConfig.TableName,
-                        allFieldsForEDA.ToArray(), // Changed from enabledFieldNames
+                        allFieldsForEDA.ToArray(), 
                         databaseConfig.WhereClause);
                 });
 
@@ -979,7 +979,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 LoadingMessage = "Preparing visualization data...";
                 await Task.Delay(50);
 
-                // Create data table without target column for visualization
+                
                 var visualizationDataTable = await Task.Run(() => CreateDataTableWithoutTarget(dataTable, targetField));
                 _visualisationViewModel.SetDataTable(visualizationDataTable);
 
@@ -1123,10 +1123,10 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var sampleSize = Math.Min(_maxSampleSize, originalTable.Rows.Count);
             var step = Math.Max(1, originalTable.Rows.Count / sampleSize);
 
-            // Create new table with sampled data
+            
             var sampledTable = new DataTable();
 
-            // Add all columns except target
+            
             foreach (DataColumn column in originalTable.Columns)
             {
                 if (string.IsNullOrEmpty(targetField) || column.ColumnName != targetField)
@@ -1135,7 +1135,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 }
             }
 
-            // Sample rows
+            
             for (int i = 0; i < originalTable.Rows.Count && sampledTable.Rows.Count < sampleSize; i += step)
             {
                 var originalRow = originalTable.Rows[i];
@@ -1154,22 +1154,22 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private DataTable CreateDataTableWithoutTarget(DataTable originalTable, string? targetField)
         {
-            // If no target field or target field doesn't exist, return the original table
+            
             if (string.IsNullOrEmpty(targetField) || !originalTable.Columns.Contains(targetField))
             {
                 return originalTable;
             }
 
-            // For large datasets, use sampling to reduce memory usage
+            
             if (_useDataSampling && originalTable.Rows.Count > _maxSampleSize)
             {
                 return CreateSampledDataTable(originalTable, targetField);
             }
 
-            // Create a new DataTable with all columns except the target
+            
             var filteredTable = new DataTable();
 
-            // Add all columns except the target column
+            
             foreach (DataColumn column in originalTable.Columns)
             {
                 if (column.ColumnName != targetField)
@@ -1178,7 +1178,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 }
             }
 
-            // Get the indices of columns to copy (excluding target column)
+            
             var columnIndices = new List<int>();
 
             for (int i = 0; i < originalTable.Columns.Count; i++)
@@ -1189,7 +1189,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 }
             }
 
-            // Batch copy data using ItemArray for better performance
+            
             foreach (DataRow originalRow in originalTable.Rows)
             {
                 var newRow = filteredTable.NewRow();
@@ -1209,11 +1209,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         public void ClearMemoryCache()
         {
-            // Clear collections to free memory
+            
             _featureTypes?.Clear();
             _columnMissingValues?.Clear();
 
-            // Force garbage collection if needed for large datasets
+            
             if (_useDataSampling)
             {
                 GC.Collect();
@@ -1244,7 +1244,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         public double MissingPercentage { get; set; }
     }
 
-    // Data point classes for proper ML.NET conversion
+    
     public class BinaryClassificationDataPoint
     {
         [VectorType]

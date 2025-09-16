@@ -227,7 +227,7 @@ namespace D2G.Iris.ML.Training
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Warning: Failed to set parameter '{key}'. Error: {ex.Message}");
+                    Console.WriteLine($"Warning: Failed to set parameter '{cleanKey}'. Error: {ex.Message}, expected type: {member switch { PropertyInfo prop => prop.PropertyType.Name, FieldInfo field => field.FieldType.Name, _ => "Unknown" }}, received value: '{value}' (type: {value?.GetType().Name ?? "null"})");
                 }
             }
         }
@@ -239,12 +239,13 @@ namespace D2G.Iris.ML.Training
 
             return nonNullableType switch
             {
-                Type t when t == typeof(int) => element.GetInt32(),
-                Type t when t == typeof(double) => element.GetDouble(),
-                Type t when t == typeof(float) => element.GetSingle(),
-                Type t when t == typeof(bool) => element.GetBoolean(),
+                Type t when t == typeof(int) => element.ValueKind == JsonValueKind.String ? int.Parse(element.GetString()!) : element.GetInt32(),
+                Type t when t == typeof(double) => element.ValueKind == JsonValueKind.String ? double.Parse(element.GetString()!) : element.GetDouble(),
+                Type t when t == typeof(float) => element.ValueKind == JsonValueKind.String ? float.Parse(element.GetString()!) : element.GetSingle(),
+                Type t when t == typeof(bool) => element.ValueKind == JsonValueKind.String ? bool.Parse(element.GetString()!) : element.GetBoolean(),
+                Type t when t == typeof(decimal) => element.ValueKind == JsonValueKind.String ? decimal.Parse(element.GetString()!) : element.GetDecimal(),
                 Type t when t == typeof(string) => element.GetString(),
-                Type t when t.IsEnum => Enum.Parse(t, element.GetString(), true),
+                Type t when t.IsEnum => Enum.Parse(t, element.GetString()!, true),
                 _ => Convert.ChangeType(element.GetRawText(), nonNullableType)
             };
         }

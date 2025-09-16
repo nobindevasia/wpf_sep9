@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -219,10 +219,20 @@ namespace D2G.Iris.ML.FeatureEngineering
                 processedData = featurePipeline.Fit(data).Transform(data);
             }
 
-            if (!processedData.Schema.GetColumnOrNull("Label").HasValue)
+            
+            var labelColumnInfo = processedData.Schema.GetColumnOrNull("Label");
+            if (labelColumnInfo == null)
             {
+                
                 var labelPipeline = _mlContext.Transforms.CopyColumns("Label", targetField);
                 processedData = labelPipeline.Fit(processedData).Transform(processedData);
+            }
+            else if (labelColumnInfo.Value.Type.RawType == typeof(bool))
+            {
+                
+                var convertPipeline = _mlContext.Transforms.Conversion.ConvertType(
+                    "Label", "Label", DataKind.Int64);
+                processedData = convertPipeline.Fit(processedData).Transform(processedData);
             }
 
             return processedData;
@@ -241,10 +251,21 @@ namespace D2G.Iris.ML.FeatureEngineering
                 var featurePipeline = _mlContext.Transforms.Concatenate("Features", featureColumns);
                 processedData = featurePipeline.Fit(data).Transform(data);
             }
-            if (!processedData.Schema.GetColumnOrNull("Label").HasValue)
+
+            
+            var labelColumnInfo = processedData.Schema.GetColumnOrNull("Label");
+            if (labelColumnInfo == null)
             {
+                
                 var labelPipeline = _mlContext.Transforms.CopyColumns("Label", targetField);
                 processedData = labelPipeline.Fit(processedData).Transform(processedData);
+            }
+            else if (labelColumnInfo.Value.Type.RawType == typeof(bool))
+            {
+                
+                var convertPipeline = _mlContext.Transforms.Conversion.ConvertType(
+                    "Label", "Label", DataKind.Single);
+                processedData = convertPipeline.Fit(processedData).Transform(processedData);
             }
 
             return processedData;

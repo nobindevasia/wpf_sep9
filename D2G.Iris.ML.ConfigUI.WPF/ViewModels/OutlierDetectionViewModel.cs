@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -169,11 +169,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             _dataTable = dataTable;
             _targetColumn = targetColumn;
             
-            // Validate target column exists if specified
+            
             if (!string.IsNullOrEmpty(_targetColumn) && _dataTable != null && !_dataTable.Columns.Contains(_targetColumn))
             {
                 _dialogService.ShowErrorDialog($"Target column '{_targetColumn}' not found in dataset. Available columns: {string.Join(", ", _dataTable.Columns.Cast<DataColumn>().Select(c => c.ColumnName))}", "Target Column Error");
-                _targetColumn = null; // Reset invalid target column
+                _targetColumn = null; 
             }
             
             UpdateAvailableColumns();
@@ -350,7 +350,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     return;
                 }
 
-                // Debug: Log which columns are being analyzed
+                
                 var columnNames = string.Join(", ", numericColumns.Select(c => c.ColumnName));
                 Console.WriteLine($"Analyzing columns for outliers: {columnNames}");
                 if (!string.IsNullOrEmpty(_targetColumn))
@@ -380,7 +380,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         _ => new List<OutlierInfo>()
                     };
 
-                    // Add detailed results
+                    
                     foreach (var outlier in outliers.OrderByDescending(o => Math.Abs(o.Score)))
                     {
                         OutlierResults.Add(new OutlierDetectionResult
@@ -394,7 +394,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         });
                     }
 
-                    // Add summary result
+                    
                     var outlierCount = outliers.Count;
                     var valueCount = values.Count;
                     var percentage = valueCount > 0 ? (double)outlierCount / valueCount * 100 : 0;
@@ -445,7 +445,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var totalRows = _dataTable!.Rows.Count;
             var values = new List<ValueInfo>(totalRows);
 
-            // Process all rows for outlier detection
+            
             for (int i = 0; i < totalRows; i++)
             {
                 var value = _dataTable.Rows[i][column];
@@ -463,7 +463,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private List<OutlierInfo> DetectZScoreOutliers(List<ValueInfo> values)
         {
-            var outliers = new List<OutlierInfo>(values.Count / 10); // Estimate ~10% outliers
+            var outliers = new List<OutlierInfo>(values.Count / 10); 
 
             if (values.Count < 2) return outliers;
 
@@ -492,7 +492,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private List<OutlierInfo> DetectIQROutliers(List<ValueInfo> values)
         {
-            var outliers = new List<OutlierInfo>(values.Count / 10); // Estimate ~10% outliers
+            var outliers = new List<OutlierInfo>(values.Count / 10); 
 
             if (values.Count < 4) return outliers;
 
@@ -528,7 +528,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         private List<OutlierInfo> DetectModifiedZScoreOutliers(List<ValueInfo> values)
         {
-            var outliers = new List<OutlierInfo>(values.Count / 10); // Estimate ~10% outliers
+            var outliers = new List<OutlierInfo>(values.Count / 10); 
 
             if (values.Count < 2) return outliers;
 
@@ -629,7 +629,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 return;
             }
 
-            // Get selected columns for outlier removal
+            
             var selectedColumns = SummaryResults
                 .Where(s => s.IsSelectedForRemoval)
                 .Select(s => s.ColumnName)
@@ -641,7 +641,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 return;
             }
 
-            // If winsorization is selected, use the winsorization method instead
+            
             if (ApplyWinsorization)
             {
                 ApplyWinsorizationToData();
@@ -655,7 +655,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
                 await Task.Delay(100);
 
-                // STEP 1: Check what columns exist
+                
                 Console.WriteLine("=== SELECTIVE OUTLIER REMOVAL ===");
                 Console.WriteLine($"Selected columns: {string.Join(", ", selectedColumns)}");
                 Console.WriteLine($"DataTable Columns ({_dataTable.Columns.Count}):");
@@ -667,7 +667,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 Console.WriteLine($"Target Column Name: '{_targetColumn}'");
                 Console.WriteLine($"Target Column Exists: {!string.IsNullOrEmpty(_targetColumn) && _dataTable.Columns.Contains(_targetColumn)}");
 
-                // STEP 2: Analyze the target column specifically
+                
                 var targetValueCounts = new Dictionary<string, int>();
                 int nullCount = 0;
 
@@ -679,7 +679,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         Console.WriteLine($"Target Column Type: {targetCol.DataType.Name}");
                     }
 
-                    // Count all unique values in target column
+                    
                     foreach (DataRow row in _dataTable.Rows)
                     {
                         var value = row[_targetColumn];
@@ -703,7 +703,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     }
                 }
 
-                // STEP 3: Filter outliers to only those from selected columns
+                
                 var selectedOutliers = OutlierResults
                     .Where(r => selectedColumns.Contains(r.ColumnName))
                     .ToList();
@@ -719,7 +719,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 Console.WriteLine($"Original dataset size: {_dataTable.Rows.Count:N0}");
                 Console.WriteLine($"Percentage to remove: {(double)rowIndicesToRemove.Count / _dataTable.Rows.Count * 100:F2}%");
 
-                // STEP 4: Check what target values are being removed
+                
                 var removedTargetValues = new Dictionary<string, int>();
                 int removedNulls = 0;
 
@@ -751,7 +751,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     Console.WriteLine($"  '{kvp.Key}': {kvp.Value} samples");
                 }
 
-                // STEP 5: Ask user for confirmation before proceeding
+                
                 var warningMessage = $"SELECTIVE OUTLIER REMOVAL:\n\n" +
                                    $"Selected columns: {string.Join(", ", selectedColumns)}\n\n" +
                                    $"Dataset size: {_dataTable.Rows.Count:N0} rows\n" +
@@ -778,7 +778,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
                 AnalysisMessage = "Removing outliers from selected columns...";
 
-                // STEP 6: Proceed with removal (in descending order to maintain indices)
+                
                 var originalRowCount = _dataTable.Rows.Count;
 
                 foreach (var rowIndex in rowIndicesToRemove.OrderByDescending(i => i))
@@ -792,7 +792,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 var newRowCount = _dataTable.Rows.Count;
                 var removedCount = originalRowCount - newRowCount;
 
-                // STEP 7: Verify final distribution
+                
                 var finalTargetValueCounts = new Dictionary<string, int>();
                 int finalNullCount = 0;
 
@@ -821,7 +821,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     Console.WriteLine($"  '{kvp.Key}': {kvp.Value:N0} samples");
                 }
 
-                // Clear only the outlier results, keep summary but update the removed columns
+                
                 OutlierResults.Clear();
                 foreach (var summary in SummaryResults.Where(s => selectedColumns.Contains(s.ColumnName)))
                 {
@@ -832,7 +832,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 }
                 RemoveOutliersEnabled = true;
 
-                // Create detailed result message
+                
                 string resultMessage = $"Selective outlier removal completed:\n\n" +
                                       $"Selected columns: {string.Join(", ", selectedColumns)}\n" +
                                       $"Original dataset: {originalRowCount:N0} rows\n" +
@@ -857,7 +857,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         resultMessage += $"\n  NULL: {finalNullCount:N0} samples";
                     }
 
-                    // Add warnings if classes are missing
+                    
                     bool hasClass0 = finalTargetValueCounts.ContainsKey("0") || finalTargetValueCounts.ContainsKey("False");
                     bool hasClass1 = finalTargetValueCounts.ContainsKey("1") || finalTargetValueCounts.ContainsKey("True");
 

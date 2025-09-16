@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -359,19 +359,19 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     var mlContext = new Microsoft.ML.MLContext(seed: 42);
                     Microsoft.ML.IDataView rawData;
 
-                    // **KEY FIX: Check if we have cleaned data from EDA outlier removal**
+                    
                     if (ExploratoryDataAnalysis.HasDataBeenCleaned())
                     {
                         Console.WriteLine("=============== Loading Data ===============");
                         Console.WriteLine("Using cleaned dataset from EDA outlier removal.");
                         
-                        // Load cleaned data directly from the DataTable
+                        
                         var cleanedDataTable = ExploratoryDataAnalysis.GetCleanedDataForTraining();
                         if (cleanedDataTable != null)
                         {
                             Console.WriteLine($">> Loaded {cleanedDataTable.Rows.Count:N0} rows of cleaned data.");
                             
-                            // Convert DataTable to IDataView
+                            
                             rawData = ConvertDataTableToIDataView(
                                 mlContext, 
                                 cleanedDataTable, 
@@ -382,7 +382,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         else
                         {
                             Console.WriteLine("Warning: Cleaned data table is null, falling back to original data loading.");
-                            // Fallback to original data loading
+                            
                             var dataLoader = new DatabaseDataLoader();
                             rawData = dataLoader.LoadDataFromSql(
                                 sqlHandler.GetConnectionString(),
@@ -398,7 +398,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         Console.WriteLine("=============== Loading Data ===============");
                         Console.WriteLine("Using original dataset from database.");
                         
-                        // Original data loading
+                        
                         var dataLoader = new DatabaseDataLoader();
                         rawData = dataLoader.LoadDataFromSql(
                             sqlHandler.GetConnectionString(),
@@ -436,7 +436,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             });
         }
 
-        // Helper method to convert DataTable to IDataView
+        
         private Microsoft.ML.IDataView ConvertDataTableToIDataView(
             Microsoft.ML.MLContext mlContext, 
             DataTable dataTable, 
@@ -446,13 +446,13 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         {
             try
             {
-                // Check if target column exists in DataTable
+                
                 if (!dataTable.Columns.Contains(targetField))
                 {
                     throw new InvalidOperationException($"Target column '{targetField}' not found in cleaned data. Available columns: {string.Join(", ", dataTable.Columns.Cast<DataColumn>().Select(c => c.ColumnName))}");
                 }
 
-                // Validate feature columns exist
+                
                 var missingFeatures = featureColumns.Where(col => !dataTable.Columns.Contains(col)).ToList();
                 if (missingFeatures.Any())
                 {
@@ -515,7 +515,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         }
                     }
 
-                    // Extract and convert label
+                    
                     var labelValue = row[targetField];
                     bool label = false;
                     string labelString = "0";
@@ -526,7 +526,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                         label = labelString == "1" || labelString == "true" || labelString == "yes";
                     }
 
-                    // Track label distribution
+                    
                     var labelKey = label ? "1" : "0";
                     labelCounts[labelKey] = labelCounts.ContainsKey(labelKey) ? labelCounts[labelKey] + 1 : 1;
 
@@ -543,7 +543,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 catch (Exception ex)
                 {
                     invalidRows++;
-                    if (invalidRows <= 5) // Log first few errors only
+                    if (invalidRows <= 5) 
                     {
                         Console.WriteLine($"Warning: Skipping invalid row: {ex.Message}");
                     }
@@ -711,7 +711,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         }
     }
 
-    // Data classes for training data conversion
+    
     public class BinaryClassificationTrainingData
     {
         [VectorType]

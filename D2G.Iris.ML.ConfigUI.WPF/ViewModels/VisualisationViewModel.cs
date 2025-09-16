@@ -115,7 +115,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     }
 
                     processedColumns++;
-                    await Task.Delay(5, cancellationToken); // Small delay for UI responsiveness
+                    await Task.Delay(5, cancellationToken); 
                 }
 
                 ProgressMessage = "Previews ready";
@@ -123,7 +123,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             }
             catch (OperationCanceledException)
             {
-                // Operation was cancelled, this is expected
+                
             }
             catch (Exception ex)
             {
@@ -148,7 +148,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         {
             if (_dataTable != null)
             {
-                // Use already loaded data
+                
                 await GenerateHistogramPreviewsAsync(_dataTable);
             }
             else
@@ -157,7 +157,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             }
         }
 
-        // Keep the old synchronous method for backward compatibility
+        
         public void GenerateHistograms(DataTable dataTable)
         {
             SetDataTable(dataTable);
@@ -195,7 +195,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var totalRows = dataTable.Rows.Count;
             var columnType = IsNumericColumn(column) ? "Numeric" : "Categorical";
             
-            // Create a simple preview chart with actual data
+            
             if (IsNumericColumn(column))
             {
                 return CreateSimpleNumericPreview(column, dataTable);
@@ -205,10 +205,10 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 return CreateSimpleCategoricalPreview(column, dataTable);
             }
             
-            // Fallback for other types
+            
             var sampleSize = Math.Min(100, totalRows);
             var dataSeries = new XyDataSeries<double, int>();
-            dataSeries.Append(0, 0); // Empty chart
+            dataSeries.Append(0, 0); 
             
             return new HistogramViewModel
             {
@@ -232,7 +232,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var values = new List<double>();
             var totalRows = dataTable.Rows.Count;
 
-            // Process all data without sampling
+            
             for (int i = 0; i < totalRows; i++)
             {
                 var value = dataTable.Rows[i][column];
@@ -256,7 +256,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 };
             }
             
-            // Create simple 10-bin histogram for preview
+            
             var bins = 10;
             var min = values.Min();
             var max = values.Max();
@@ -303,7 +303,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var allValues = new List<string>();
             var totalRows = dataTable.Rows.Count;
 
-            // Process all data without sampling
+            
             for (int i = 0; i < totalRows; i++)
             {
                 var value = dataTable.Rows[i][column]?.ToString();
@@ -316,7 +316,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var categoryGroups = allValues
                 .GroupBy(s => s)
                 .OrderByDescending(g => g.Count())
-                .Take(20) // Show top 20 categories (same as full histogram)
+                .Take(20) 
                 .ToList();
             
             var dataSeries = new XyDataSeries<double, int>();
@@ -358,7 +358,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             {
                 histogram.IsLoading = true;
                 
-                // Verify the column still exists
+                
                 if (!_dataTable.Columns.Contains(histogram.ColumnName))
                 {
                     _dialogService.ShowErrorDialog($"Column '{histogram.ColumnName}' no longer exists in the dataset.", "Error");
@@ -372,7 +372,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     return;
                 }
                 
-                // Since we already have full data, just load the detailed statistics
+                
                 HistogramViewModel? detailedHistogram = null;
                 
                 if (IsNumericColumn(column))
@@ -386,7 +386,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 
                 if (detailedHistogram != null)
                 {
-                    // Copy selection state and replace with detailed version
+                    
                     detailedHistogram.IsSelected = histogram.IsSelected;
                     
                     var index = Histograms.IndexOf(histogram);
@@ -431,7 +431,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var values = new List<double>();
             var allValues = new List<object?>();
             
-            // Process all data without sampling
+            
             int rowCount = dataTable.Rows.Count;
 
             for (int i = 0; i < rowCount; i++)
@@ -447,7 +447,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     }
                 }
 
-                // Yield occasionally to prevent blocking
+                
                 if (i % _chunkSize == 0)
                 {
                     Thread.Yield();
@@ -463,14 +463,14 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             
             var histogram = new List<HistogramBin>();
 
-            // Handle case where all values are the same (e.g., all zeros)
+            
             if (range == 0 || Math.Abs(range) < double.Epsilon)
             {
-                // Create a simple 3-bin histogram centered on the constant value
-                // This provides better Y-axis scaling and visual clarity
+                
+                
                 var totalCount = values.Count;
-                var spread = Math.Max(1.0, Math.Abs(min) * 0.1); // 10% of value or minimum 1
-                if (spread == 0) spread = 1.0; // For true zero values
+                var spread = Math.Max(1.0, Math.Abs(min) * 0.1); 
+                if (spread == 0) spread = 1.0; 
                 
                 histogram.Add(new HistogramBin
                 {
@@ -550,14 +550,14 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             
             var allValues = new List<string?>();
             
-            // Process all data without sampling
+            
             int rowCount = dataTable.Rows.Count;
 
             for (int i = 0; i < rowCount; i++)
             {
                 allValues.Add(dataTable.Rows[i][column]?.ToString());
 
-                // Yield occasionally to prevent blocking
+                
                 if (i % _chunkSize == 0)
                 {
                     Thread.Yield();
@@ -610,7 +610,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             
             var mean = values.Average();
             var variance = n > 1 ? values.Sum(x => Math.Pow(x - mean, 2)) / n : 0;
-            var standardDeviation = Math.Sqrt(Math.Max(0, variance)); // Ensure non-negative
+            var standardDeviation = Math.Sqrt(Math.Max(0, variance)); 
             
             var median = n % 2 == 0 
                 ? (sortedValues[n / 2 - 1] + sortedValues[n / 2]) / 2.0
@@ -618,7 +618,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             
             var q1 = CalculatePercentile(sortedValues, 25);
             var q3 = CalculatePercentile(sortedValues, 75);
-            var iqr = Math.Max(0, q3 - q1); // Ensure non-negative IQR
+            var iqr = Math.Max(0, q3 - q1); 
             
             var skewness = CalculateSkewness(values, mean, standardDeviation);
             var kurtosis = CalculateKurtosis(values, mean, standardDeviation);
@@ -694,7 +694,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 var upper = (int)Math.Ceiling(index);
                 var weight = index - lower;
                 
-                // Ensure indices are within bounds
+                
                 lower = Math.Max(0, Math.Min(lower, n - 1));
                 upper = Math.Max(0, Math.Min(upper, n - 1));
                 
@@ -719,7 +719,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             var n = values.Count;
             var sum = values.Sum(x => Math.Pow((x - mean) / standardDeviation, 4));
             
-            return (sum / n) - 3; // Excess kurtosis
+            return (sum / n) - 3; 
         }
 
         private async Task SelectHistogramAsync(HistogramViewModel? histogram)
@@ -735,9 +735,9 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 
                 histogram.IsSelected = true;
                 
-                // Load detailed histogram with full statistics
+                
                 await LoadFullHistogramAsync(histogram);
-                // Get the updated histogram after loading - safer approach
+                
                 histogram = Histograms.FirstOrDefault(h => h.ColumnName == histogram.ColumnName);
                 if (histogram == null)
                 {

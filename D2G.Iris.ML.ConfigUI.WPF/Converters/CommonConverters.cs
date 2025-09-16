@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
@@ -121,7 +121,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.Converters
         {
             if (value is int count)
             {
-                // Check if parameter is "Inverse" to reverse the logic
+                
                 bool isInverse = parameter?.ToString() == "Inverse";
                 
                 if (isInverse)

@@ -260,18 +260,27 @@ namespace D2G.Iris.ML.Utils
         {
             var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
-            if (underlyingType == typeof(int))
-                return int.Parse(value);
-            else if (underlyingType == typeof(double))
-                return double.Parse(value);
-            else if (underlyingType == typeof(float))
-                return float.Parse(value.Replace("f", ""));
-            else if (underlyingType == typeof(bool))
-                return bool.Parse(value);
-            else if (underlyingType.IsEnum)
-                return Enum.Parse(underlyingType, value, true);
-            else
-                return value;
+            try
+            {
+                if (underlyingType == typeof(int))
+                    return int.Parse(value);
+                else if (underlyingType == typeof(double))
+                    return double.Parse(value);
+                else if (underlyingType == typeof(float))
+                    return float.Parse(value.Replace("f", ""));
+                else if (underlyingType == typeof(bool))
+                    return bool.Parse(value);
+                else if (underlyingType.IsEnum)
+                    return Enum.Parse(underlyingType, value, true);
+                else if (underlyingType == typeof(decimal))
+                    return decimal.Parse(value);
+                else
+                    return value;
+            }
+            catch (FormatException)
+            {
+                throw new FormatException($"Cannot convert '{value}' to type {underlyingType.Name}");
+            }
         }
 
         public static string GetDefaultValue(Type type)

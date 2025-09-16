@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -32,13 +32,35 @@ namespace D2G.Iris.ML.Training
             Console.WriteLine($"\nStarting binary classification using {(config.AutoML?.Enabled == true ? "AutoML" : config.TrainingParameters.Algorithm)}");
             try
             {
+                
+                IDataView labeledData;
 
-                var labelPipeline = mlContext.Transforms.CopyColumns(
-                        outputColumnName: "RawLabel", inputColumnName: config.TargetField)
-                    .Append(mlContext.Transforms.Conversion.ConvertType(
-                        outputColumnName: "Label", inputColumnName: "RawLabel", outputKind: DataKind.Boolean));
+                if (dataView.Schema.GetColumnOrNull("Label").HasValue)
+                {
+                    
+                    var labelType = dataView.Schema["Label"].Type;
+                    if (labelType.RawType != typeof(bool))
+                    {
+                        
+                        var labelPipeline = mlContext.Transforms.Conversion.ConvertType(
+                            outputColumnName: "Label", inputColumnName: "Label", outputKind: DataKind.Boolean);
+                        labeledData = labelPipeline.Fit(dataView).Transform(dataView);
+                    }
+                    else
+                    {
+                        labeledData = dataView;
+                    }
+                }
+                else
+                {
+                    
+                    var labelPipeline = mlContext.Transforms.CopyColumns(
+                            outputColumnName: "RawLabel", inputColumnName: config.TargetField)
+                        .Append(mlContext.Transforms.Conversion.ConvertType(
+                            outputColumnName: "Label", inputColumnName: "RawLabel", outputKind: DataKind.Boolean));
+                    labeledData = labelPipeline.Fit(dataView).Transform(dataView);
+                }
 
-                var labeledData = labelPipeline.Fit(dataView).Transform(dataView);
                 IDataView preparedData = PrepareData(labeledData, featureNames);
 
                 return config.AutoML?.Enabled == true

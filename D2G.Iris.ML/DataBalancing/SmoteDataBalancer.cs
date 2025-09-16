@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -34,10 +34,27 @@ namespace D2G.Iris.ML.DataBalancing
             {
                 IDataView preparedData = data;
 
+                
                 if (data.Schema.GetColumnOrNull("Features") == null)
                 {
                     var pipeline = mlContext.Transforms.Concatenate("Features", featureNames);
                     preparedData = pipeline.Fit(data).Transform(data);
+                }
+
+                
+                var labelColumnInfo = data.Schema.GetColumnOrNull("Label");
+                if (labelColumnInfo == null)
+                {
+                    
+                    var labelPipeline = mlContext.Transforms.CopyColumns("Label", targetField);
+                    preparedData = labelPipeline.Fit(preparedData).Transform(preparedData);
+                }
+                else if (labelColumnInfo.Value.Type.RawType == typeof(bool))
+                {
+                    
+                    var convertPipeline = mlContext.Transforms.Conversion.ConvertType(
+                        "Label", "Label", DataKind.Int64);
+                    preparedData = convertPipeline.Fit(preparedData).Transform(preparedData);
                 }
 
                 var dataEnumerable = mlContext.Data.CreateEnumerable<FeatureVector>(
