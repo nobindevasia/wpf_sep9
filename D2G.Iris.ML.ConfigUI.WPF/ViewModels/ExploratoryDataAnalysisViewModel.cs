@@ -610,6 +610,9 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             return denominator == 0 ? 0.0 : numerator / denominator;
         }
 
+        // Replace the existing FeatureNameLabelProvider and ReversedFeatureNameLabelProvider classes
+        // in ExploratoryDataAnalysisViewModel.cs with these corrected versions:
+
         public class FeatureNameLabelProvider : LabelProviderBase
         {
             private readonly string[] featureNames;
@@ -623,12 +626,14 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             {
                 try
                 {
-                    // Map tick at k-0.5 to index k
+                    // Map tick at k-0.5 to index k, but reverse to match Y-axis
                     int index = (int)Math.Floor(Convert.ToDouble(dataValue) + 0.5);
-                    if (index >= 0 && index < featureNames.Length)
+                    // Reverse the index to align with flipped Y-axis
+                    int reversedIndex = featureNames.Length - 1 - index;
+                    if (reversedIndex >= 0 && reversedIndex < featureNames.Length)
                     {
                         // Truncate long feature names for better display
-                        string name = featureNames[index];
+                        string name = featureNames[reversedIndex];
                         return name.Length > 12 ? name.Substring(0, 12) + "..." : name;
                     }
                     return string.Empty;
@@ -644,8 +649,10 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 try
                 {
                     int index = (int)Math.Floor(Convert.ToDouble(dataValue) + 0.5);
-                    if (index >= 0 && index < featureNames.Length)
-                        return featureNames[index]; // Full name in cursor tooltip
+                    // Reverse the index to align with flipped Y-axis
+                    int reversedIndex = featureNames.Length - 1 - index;
+                    if (reversedIndex >= 0 && reversedIndex < featureNames.Length)
+                        return featureNames[reversedIndex]; // Full name in cursor tooltip
                     return string.Empty;
                 }
                 catch
