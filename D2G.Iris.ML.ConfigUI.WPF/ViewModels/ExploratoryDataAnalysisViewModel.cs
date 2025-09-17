@@ -177,6 +177,25 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             return _outlierDetectionViewModel.HasOutliersBeenRemoved();
         }
 
+        public bool HasDataBeenLoaded()
+        {
+            return _currentDataTable != null;
+        }
+
+        public DataTable? GetOriginalDataForTraining()
+        {
+            return _currentDataTable;
+        }
+
+        public DataTable? GetDataForTraining()
+        {
+            if (_outlierDetectionViewModel.HasOutliersBeenRemoved())
+            {
+                return _outlierDetectionViewModel.GetCleanedDataTable();
+            }
+            return _currentDataTable;
+        }
+
         public IDataView? GetCleanedDataAsIDataView(MLContext mlContext, IEnumerable<string> featureColumns, string targetColumn, ModelType modelType)
         {
             if (!HasDataBeenCleaned() || _outlierDetectionViewModel.GetCleanedDataTable() == null)

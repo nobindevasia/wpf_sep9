@@ -5,7 +5,7 @@ using D2G.Iris.ML.Core.Interfaces;
 
 namespace D2G.Iris.ML.Training
 {
-    public class ModelTrainerFactory
+    public class ModelTrainerFactory : IModelTrainerFactory
     {
         private readonly MLContext _mlContext;
         private readonly TrainerFactory _trainerFactory;

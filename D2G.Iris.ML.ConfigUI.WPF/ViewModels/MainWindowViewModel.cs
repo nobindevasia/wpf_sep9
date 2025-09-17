@@ -13,6 +13,7 @@ using D2G.Iris.ML.ConfigUI.WPF.Commands;
 using D2G.Iris.ML.ConfigUI.WPF.Services;
 using D2G.Iris.ML.Core.Enums;
 using D2G.Iris.ML.Core.Models;
+using D2G.Iris.ML.Core.Interfaces;
 using D2G.Iris.ML.Configuration;
 using D2G.Iris.ML.Data;
 
@@ -22,6 +23,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
     {
         private readonly IConfigurationService _configService;
         private readonly IDialogService _dialogService;
+        private readonly IConfigManager _configManager;
+        private readonly ISqlHandler _sqlHandler;
+        private readonly IDataLoader _dataLoader;
+        private readonly IDataProcessor _dataProcessor;
+        private readonly IModelTrainerFactory _modelTrainerFactory;
         private ModelConfig? _currentConfig;
         private string? _currentFilePath;
         private string _windowTitle = "Iris ML Config";
@@ -30,10 +36,20 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
         public MainWindowViewModel(
             IConfigurationService configService,
-            IDialogService dialogService)
+            IDialogService dialogService,
+            IConfigManager configManager,
+            ISqlHandler sqlHandler,
+            IDataLoader dataLoader,
+            IDataProcessor dataProcessor,
+            IModelTrainerFactory modelTrainerFactory)
         {
             _configService = configService;
             _dialogService = dialogService;
+            _configManager = configManager;
+            _sqlHandler = sqlHandler;
+            _dataLoader = dataLoader;
+            _dataProcessor = dataProcessor;
+            _modelTrainerFactory = modelTrainerFactory;
 
             InitializeViewModels();
             InitializeCommands();
@@ -90,7 +106,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             DataProcessingPipeline = new DataProcessingPipelineViewModel();
             TrainingLogs = new TrainingLogsViewModel();
 
-            TrainingParameters.ModelTypeChanged += OnModelTypeChanged;
 
             InputFields.SetDependencies(() => DatabaseSettings.GetConfiguration(), () => TrainingParameters.TargetField);
             ExploratoryDataAnalysis.SetDependencies(() => DatabaseSettings.GetConfiguration(), () => InputFields.GetConfiguration(), () => TrainingParameters.TargetField);
@@ -105,9 +120,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             LaunchTrainingCommand = new AsyncRelayCommand(LaunchTraining, () => !IsTraining);
         }
 
-        private void OnModelTypeChanged(ModelType newModelType)
-        {
-        }
 
         private void LoadExistingConfigOnStartup()
         {
@@ -345,11 +357,9 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     string jsonConfig = JsonSerializer.Serialize(serializableConfig, options);
                     File.WriteAllText(tempConfigPath, jsonConfig);
 
-                    var configManager = new ConfigManager();
-                    var config = configManager.LoadConfiguration(tempConfigPath);
+                    var config = _configManager.LoadConfiguration(tempConfigPath);
 
-                    var sqlHandler = new SqlHandler(config.Database.TableName);
-                    sqlHandler.Connect(config.Database);
+                    _sqlHandler.Connect(config.Database);
 
                     var enabledFields = config.InputFields
                         .Where(f => f.IsEnabled)
@@ -359,33 +369,39 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     var mlContext = new Microsoft.ML.MLContext(seed: 42);
                     Microsoft.ML.IDataView rawData;
 
-                    
-                    if (ExploratoryDataAnalysis.HasDataBeenCleaned())
+
+                    if (ExploratoryDataAnalysis.HasDataBeenLoaded())
                     {
                         Console.WriteLine("=============== Loading Data ===============");
-                        Console.WriteLine("Using cleaned dataset from EDA outlier removal.");
-                        
-                        
-                        var cleanedDataTable = ExploratoryDataAnalysis.GetCleanedDataForTraining();
-                        if (cleanedDataTable != null)
+                        Console.WriteLine("Using cached dataset from EDA analysis.");
+
+
+                        var cachedDataTable = ExploratoryDataAnalysis.GetDataForTraining();
+                        if (cachedDataTable != null)
                         {
-                            Console.WriteLine($">> Loaded {cleanedDataTable.Rows.Count:N0} rows of cleaned data.");
-                            
-                            
+                            if (ExploratoryDataAnalysis.HasDataBeenCleaned())
+                            {
+                                Console.WriteLine($">> Using cleaned data with {cachedDataTable.Rows.Count:N0} rows (outliers removed).");
+                            }
+                            else
+                            {
+                                Console.WriteLine($">> Using original EDA data with {cachedDataTable.Rows.Count:N0} rows.");
+                            }
+
+
                             rawData = ConvertDataTableToIDataView(
-                                mlContext, 
-                                cleanedDataTable, 
-                                enabledFields, 
-                                config.TargetField, 
+                                mlContext,
+                                cachedDataTable,
+                                enabledFields,
+                                config.TargetField,
                                 config.ModelType);
                         }
                         else
                         {
-                            Console.WriteLine("Warning: Cleaned data table is null, falling back to original data loading.");
-                            
-                            var dataLoader = new DatabaseDataLoader();
-                            rawData = dataLoader.LoadDataFromSql(
-                                sqlHandler.GetConnectionString(),
+                            Console.WriteLine("Warning: Cached data table is null, falling back to database loading.");
+
+                            rawData = _dataLoader.LoadDataFromSql(
+                                _sqlHandler.GetConnectionString(),
                                 config.Database.TableName,
                                 enabledFields,
                                 config.ModelType,
@@ -396,12 +412,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     else
                     {
                         Console.WriteLine("=============== Loading Data ===============");
-                        Console.WriteLine("Using original dataset from database.");
-                        
-                        
-                        var dataLoader = new DatabaseDataLoader();
-                        rawData = dataLoader.LoadDataFromSql(
-                            sqlHandler.GetConnectionString(),
+                        Console.WriteLine("No cached data available, loading from database.");
+
+
+                        rawData = _dataLoader.LoadDataFromSql(
+                            _sqlHandler.GetConnectionString(),
                             config.Database.TableName,
                             enabledFields,
                             config.ModelType,
@@ -409,15 +424,13 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                             config.Database.WhereClause);
                     }
 
-                    var dataProcessor = new DataProcessor(sqlHandler);
-                    var processedData = dataProcessor.ProcessData(
+                    var processedData = _dataProcessor.ProcessData(
                         mlContext,
                         rawData,
                         enabledFields,
                         config).GetAwaiter().GetResult();
 
-                    var modelTrainerFactory = new Training.ModelTrainerFactory(mlContext);
-                    var modelTrainer = modelTrainerFactory.CreateTrainer(config.ModelType);
+                    var modelTrainer = _modelTrainerFactory.CreateTrainer(config.ModelType);
 
                     modelTrainer.TrainModel(
                         mlContext,

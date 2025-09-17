@@ -147,7 +147,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 config.Database.OutputTableName = IntermediateResultsTableName;
             }
         }
-
+        
         public void ResetToDefaults()
         {
             _dataBalancingViewModel.SetConfiguration(null);

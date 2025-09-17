@@ -3,6 +3,11 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using D2G.Iris.ML.ConfigUI.WPF.Services;
 using D2G.Iris.ML.ConfigUI.WPF.ViewModels;
+using D2G.Iris.ML.Core.Interfaces;
+using D2G.Iris.ML.Configuration;
+using D2G.Iris.ML.Data;
+using D2G.Iris.ML.Training;
+using Microsoft.ML;
 
 namespace D2G.Iris.ML.ConfigUI.WPF
 {
@@ -17,6 +22,14 @@ namespace D2G.Iris.ML.ConfigUI.WPF
             services.AddSingleton<IConfigurationService, ConfigurationService>();
             services.AddSingleton<IDatabaseSchemaLoader, DatabaseSchemaLoader>();
             services.AddSingleton<IDialogService, DialogService>();
+
+            // Register ML dependencies
+            services.AddSingleton<IConfigManager, ConfigManager>();
+            services.AddSingleton<ISqlHandler>(provider => new SqlHandler("DefaultTable"));
+            services.AddSingleton<IDataLoader, DatabaseDataLoader>();
+            services.AddSingleton<IDataProcessor, DataProcessor>();
+            services.AddSingleton<MLContext>();
+            services.AddSingleton<IModelTrainerFactory, ModelTrainerFactory>();
 
 
             services.AddTransient<MainWindowViewModel>();

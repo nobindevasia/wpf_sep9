@@ -91,7 +91,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             get => _zScoreThreshold;
             set => SetProperty(ref _zScoreThreshold, value);
         }
-
+        
         public double IQRMultiplier
         {
             get => _iqrMultiplier;
