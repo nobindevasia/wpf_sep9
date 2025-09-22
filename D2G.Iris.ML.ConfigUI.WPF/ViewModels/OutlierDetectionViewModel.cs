@@ -352,11 +352,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
                 
                 var columnNames = string.Join(", ", numericColumns.Select(c => c.ColumnName));
-                Console.WriteLine($"Analyzing columns for outliers: {columnNames}");
-                if (!string.IsNullOrEmpty(_targetColumn))
-                {
-                    Console.WriteLine($"Target column '{_targetColumn}' excluded from outlier analysis.");
-                }
+                //Console.WriteLine($"Analyzing columns for outliers: {columnNames}");
+                //if (!string.IsNullOrEmpty(_targetColumn))
+                //{
+                //    Console.WriteLine($"Target column '{_targetColumn}' excluded from outlier analysis.");
+                //}
 
                 AnalysisMessage = $"Analyzing {numericColumns.Count} numeric columns using {SelectedMethod}...";
                 await Task.Delay(100);
@@ -752,29 +752,28 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 }
 
                 
-                var warningMessage = $"SELECTIVE OUTLIER REMOVAL:\n\n" +
-                                   $"Selected columns: {string.Join(", ", selectedColumns)}\n\n" +
-                                   $"Dataset size: {_dataTable.Rows.Count:N0} rows\n" +
-                                   $"Outliers to remove: {rowIndicesToRemove.Count:N0} rows ({(double)rowIndicesToRemove.Count / _dataTable.Rows.Count * 100:F2}%)\n\n";
+                //var warningMessage = $"SELECTIVE OUTLIER REMOVAL:\n\n" +
+                //                   $"Selected columns: {string.Join(", ", selectedColumns)}\n\n" +
+                //                   $"Dataset size: {_dataTable.Rows.Count:N0} rows\n" +
+                //                   $"Outliers to remove: {rowIndicesToRemove.Count:N0} rows ({(double)rowIndicesToRemove.Count / _dataTable.Rows.Count * 100:F2}%)\n\n";
 
-                if (!string.IsNullOrEmpty(_targetColumn))
-                {
-                    warningMessage += $"Target column: '{_targetColumn}'\n" +
-                                    $"Current class distribution:\n" +
-                                    string.Join("\n", targetValueCounts.Select(kvp => $"  {kvp.Key}: {kvp.Value:N0} samples")) +
-                                    (nullCount > 0 ? $"\n  NULL: {nullCount:N0} samples" : "") +
-                                    "\n\n";
-                }
+                //if (!string.IsNullOrEmpty(_targetColumn))
+                //{
+                //    warningMessage += $"Target column: '{_targetColumn}'\n" +
+                //                    $"Current class distribution:\n" +
+                //                    string.Join("\n", targetValueCounts.Select(kvp => $"  {kvp.Key}: {kvp.Value:N0} samples")) +
+                //                    (nullCount > 0 ? $"\n  NULL: {nullCount:N0} samples" : "") +
+                //                    "\n\n";
+                //}
 
-                warningMessage += $"Do you want to proceed with selective outlier removal?\n\n" +
-                                $"⚠️ Large percentage removal may cause class imbalance issues!";
+                //warningMessage += $"Do you want to proceed with selective outlier removal?\n\n";
 
-                if (!_dialogService.ShowConfirmationDialog(warningMessage, "Confirm Selective Outlier Removal"))
-                {
-                    IsAnalyzing = false;
-                    AnalysisMessage = string.Empty;
-                    return;
-                }
+                //if (!_dialogService.ShowConfirmationDialog(warningMessage, "Confirm Selective Outlier Removal"))
+                //{
+                //    IsAnalyzing = false;
+                //    AnalysisMessage = string.Empty;
+                //    return;
+                //}
 
                 AnalysisMessage = "Removing outliers from selected columns...";
 
@@ -833,8 +832,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 RemoveOutliersEnabled = true;
 
                 
-                string resultMessage = $"Selective outlier removal completed:\n\n" +
-                                      $"Selected columns: {string.Join(", ", selectedColumns)}\n" +
+                string resultMessage = $"Outlier removal completed:\n\n" +
+                                 
                                       $"Original dataset: {originalRowCount:N0} rows\n" +
                                       $"Cleaned dataset: {newRowCount:N0} rows\n" +
                                       $"Removed: {removedCount:N0} rows\n\n";
@@ -849,7 +848,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                     }
                     else
                     {
-                        resultMessage += "  ⚠️ NO CLASS SAMPLES REMAINING!";
+                        resultMessage += " NO CLASS SAMPLES REMAINING!";
                     }
 
                     if (finalNullCount > 0)
@@ -863,13 +862,11 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
                     if (!hasClass0 || !hasClass1)
                     {
-                        resultMessage += "\n\n⚠️ WARNING: Missing class data may cause training errors!";
+                        resultMessage += "\n\n WARNING: Missing class data may cause training errors!";
                     }
 
                     resultMessage += "\n\n";
                 }
-
-                resultMessage += "The cleaned dataset will be used for training.";
 
                 _dialogService.ShowInfoDialog(resultMessage, "Selective Outliers Removed");
             }

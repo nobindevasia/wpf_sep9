@@ -22,8 +22,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF
             services.AddSingleton<IConfigurationService, ConfigurationService>();
             services.AddSingleton<IDatabaseSchemaLoader, DatabaseSchemaLoader>();
             services.AddSingleton<IDialogService, DialogService>();
-
-            // Register ML dependencies
             services.AddSingleton<IConfigManager, ConfigManager>();
             services.AddSingleton<ISqlHandler>(provider => new SqlHandler("DefaultTable"));
             services.AddSingleton<IDataLoader, DatabaseDataLoader>();

@@ -218,7 +218,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 {
                     var result = _dialogService.ShowConfirmationDialog(
                         $"This will replace your current {InputFields.Count} field(s) with {inputFields.Count} fields from the database table '{dbConfig.TableName}'.\n\n" +
-                        $"All loaded fields will be enabled by default. You can disable fields you don't want to use.\n\n" +
                         "Do you want to continue?",
                         "Replace Current Fields?");
 

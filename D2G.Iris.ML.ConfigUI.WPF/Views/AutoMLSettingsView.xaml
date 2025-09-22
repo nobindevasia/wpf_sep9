@@ -16,6 +16,8 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="15"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="15"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
@@ -24,37 +26,33 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            
-            <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
-                      Content="Enable AutoML"
-                      IsChecked="{Binding IsEnabled}"
-                      FontWeight="Bold"
-                      VerticalAlignment="Center"/>
 
-            
-            <Label Grid.Row="2" Grid.Column="0" Content="Max Experiment Time:" VerticalAlignment="Center"
-                   IsEnabled="{Binding IsEnabled}"/>
-            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
-                <TextBox Text="{Binding MaxExperimentTimeInSeconds, UpdateSourceTrigger=PropertyChanged}" 
-                         VerticalAlignment="Center" Height="25" Width="80"
-                         IsEnabled="{Binding IsEnabled}"/>
-                <Label Content="seconds" VerticalAlignment="Center" Margin="5,0,0,0"
-                       IsEnabled="{Binding IsEnabled}"/>
+            <Label Grid.Row="0" Grid.Column="0" Content="Max Experiment Time:" VerticalAlignment="Center"/>
+            <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                <TextBox Text="{Binding MaxExperimentTimeInSeconds, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalAlignment="Center" Height="25" Width="80"/>
+                <Label Content="seconds" VerticalAlignment="Center" Margin="5,0,0,0"/>
             </StackPanel>
 
-            
-            <Label Grid.Row="4" Grid.Column="0" Content="Optimizing Metric:" VerticalAlignment="Center"
-                   IsEnabled="{Binding IsEnabled}"/>
-            <ComboBox Grid.Row="4" Grid.Column="1" 
+
+            <Label Grid.Row="2" Grid.Column="0" Content="Max Models to Try:" VerticalAlignment="Center"/>
+            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                <TextBox Text="{Binding MaxModels, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalAlignment="Center" Height="25" Width="80"/>
+                <Label Content="models" VerticalAlignment="Center" Margin="5,0,0,0"/>
+            </StackPanel>
+
+
+            <Label Grid.Row="4" Grid.Column="0" Content="Optimizing Metric:" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="4" Grid.Column="1"
                       ItemsSource="{Binding AvailableMetrics}"
                       SelectedItem="{Binding OptimizingMetric}"
-                      VerticalAlignment="Center" Height="25" Width="200" HorizontalAlignment="Left"
-                      IsEnabled="{Binding IsEnabled}"/>
+                      VerticalAlignment="Center" Height="25" Width="200" HorizontalAlignment="Left"/>
 
-            
-            <TextBlock Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3" 
-                       Text="{Binding Description}" 
-                       TextWrapping="Wrap" 
+
+            <TextBlock Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3"
+                       Text="{Binding Description}"
+                       TextWrapping="Wrap"
                        Foreground="DarkBlue"
                        Margin="0,10,0,0"/>
         </Grid>

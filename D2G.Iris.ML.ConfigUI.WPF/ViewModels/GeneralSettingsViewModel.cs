@@ -13,7 +13,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         private string _description = "New Model Configuration";
         private DateTime _createdDate = DateTime.Now;
         private DateTime _lastModified = DateTime.Now;
-        private Priority _priority = Priority.Medium;
         private string _notes = "";
 
         #region Properties
@@ -66,17 +65,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             set => SetProperty(ref _lastModified, value);
         }
 
-        public Priority Priority
-        {
-            get => _priority;
-            set
-            {
-                if (SetProperty(ref _priority, value))
-                {
-                    LastModified = DateTime.Now;
-                }
-            }
-        }
 
         public string Notes
         {
@@ -90,7 +78,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             }
         }
 
-        public IEnumerable<Priority> AvailablePriorities => Enum.GetValues<Priority>();
 
         #endregion
 
@@ -112,9 +99,6 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 if (config.ExtendedProperties.TryGetValue("LastModified", out var lastModified) && DateTime.TryParse(lastModified?.ToString(), out var modified))
                     LastModified = modified;
 
-                if (config.ExtendedProperties.TryGetValue("Priority", out var priority) && Enum.TryParse<Priority>(priority?.ToString(), out var parsedPriority))
-                    Priority = parsedPriority;
-
                 if (config.ExtendedProperties.TryGetValue("Notes", out var notes))
                     Notes = notes?.ToString() ?? "";
             }
@@ -132,20 +116,8 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             config.ExtendedProperties["ProjectName"] = ProjectName;
             config.ExtendedProperties["CreatedDate"] = CreatedDate;
             config.ExtendedProperties["LastModified"] = LastModified;
-            config.ExtendedProperties["Priority"] = Priority.ToString();
             config.ExtendedProperties["Notes"] = Notes;
         }
     }
 
-    public enum Priority
-    {
-        [Description("Low Priority")]
-        Low,
-        [Description("Medium Priority")]
-        Medium,
-        [Description("High Priority")]
-        High,
-        [Description("Critical Priority")]
-        Critical
-    }
 }

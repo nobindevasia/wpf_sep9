@@ -111,8 +111,8 @@
                         HorizontalAlignment="Left" Margin="0,10,0,5"/>
 
                 <!-- Apply Winsorization Button -->
-                <Button Grid.Row="3" Grid.Column="2" Content="Apply Winsorization" 
-                        Command="{Binding ApplyWinsorizationCommand}" Width="120" Height="30" 
+                <Button Grid.Row="3" Grid.Column="2" Content="Apply Winsorization"
+                        Command="{Binding ApplyWinsorizationCommand}" Width="131" Height="30"
                         HorizontalAlignment="Right" Margin="0,10,0,5"
                         Background="#FF2E8B57" Foreground="White"
                         ToolTip="Apply winsorization treatment: caps extreme values at the specified percentiles (independent of detection method)."/>

@@ -36,9 +36,15 @@
                                         Width="*" 
                                         IsReadOnly="True"/>
 
-                    <DataGridCheckBoxColumn Header="Enabled" 
-                                            Binding="{Binding IsEnabled}" 
-                                            Width="80"/>
+                    <DataGridTemplateColumn Header="Enabled" Width="80">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
 
@@ -73,20 +79,6 @@
                     </Button.Style>
                 </Button>
 
-                
-                <Button Content="Add" 
-                        Command="{Binding AddFieldCommand}"
-                        Width="60" Height="30" Margin="0,0,5,0"/>
-
-                
-                <Button Content="Edit" 
-                        Command="{Binding EditFieldCommand}"
-                        Width="60" Height="30" Margin="0,0,5,0"/>
-
-                
-                <Button Content="Remove" 
-                        Command="{Binding RemoveFieldCommand}"
-                        Width="70" Height="30"/>
             </StackPanel>
         </Grid>
     </GroupBox>

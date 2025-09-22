@@ -297,6 +297,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="15"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="15"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150"/>
@@ -304,17 +306,25 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        
+
                         <Label Grid.Row="0" Grid.Column="0" Content="Max Experiment Time:" VerticalAlignment="Center"/>
                         <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
-                            <TextBox Text="{Binding MaxExperimentTimeInSeconds, UpdateSourceTrigger=PropertyChanged}" 
+                            <TextBox Text="{Binding MaxExperimentTimeInSeconds, UpdateSourceTrigger=PropertyChanged}"
                                      VerticalAlignment="Center" Height="25" Width="80"/>
                             <Label Content="seconds" VerticalAlignment="Center" Margin="5,0,0,0"/>
                         </StackPanel>
 
-                        
-                        <Label Grid.Row="2" Grid.Column="0" Content="Optimizing Metric:" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Row="2" Grid.Column="1" 
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Max Models to Try:" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                            <TextBox Text="{Binding MaxModels, UpdateSourceTrigger=PropertyChanged}"
+                                     VerticalAlignment="Center" Height="25" Width="80"/>
+                            <Label Content="models" VerticalAlignment="Center" Margin="5,0,0,0"/>
+                        </StackPanel>
+
+
+                        <Label Grid.Row="4" Grid.Column="0" Content="Optimizing Metric:" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Row="4" Grid.Column="1"
                                   ItemsSource="{Binding AvailableMetrics}"
                                   SelectedItem="{Binding OptimizingMetric}"
                                   VerticalAlignment="Center" Height="25" Width="200" HorizontalAlignment="Left"/>

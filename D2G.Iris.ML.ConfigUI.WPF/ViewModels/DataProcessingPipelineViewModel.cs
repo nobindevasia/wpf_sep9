@@ -41,7 +41,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                 }
             }
         }
-
+        
         public bool IsFeatureEngineeringEnabled
         {
             get => _featureEngineeringViewModel.SelectedMethod != FeatureSelectionMethod.None;

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using SN = System.Numerics;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows;
@@ -559,80 +560,139 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
                    dataType == typeof(decimal);
         }
 
-        private double[,] CalculateCorrelationMatrix(DataTable dataTable, List<string> numericColumns)
+        private double[,] CalculateCorrelationMatrix(DataTable dt, List<string> numericColumns)
         {
-            int size = numericColumns.Count;
-            var correlationMatrix = new double[size, size];
 
-            for (int i = 0; i < size; i++)
-            {
-                for (int j = 0; j < size; j++)
-                {
-                    if (i == j)
-                    {
-                        correlationMatrix[i, j] = 1.0;
-                    }
-                    else
-                    {
-                        var correlation = CalculatePearsonCorrelation(
-                            dataTable, numericColumns[i], numericColumns[j]);
-                        correlationMatrix[i, j] = correlation;
-                    }
-                }
-            }
+            var sub = dt.DefaultView.ToTable(false, numericColumns.ToArray());
+            var (X, _) = PearsonCorrelation.ToDenseColumns(sub);
 
-            return correlationMatrix;
+            var (Y, _) = PearsonCorrelation.DropRowsWithAnyNaN(X);
+
+            return PearsonCorrelation.Correlation(Y);
         }
 
-        private double CalculatePearsonCorrelation(DataTable dataTable, string column1, string column2)
+
+
+        
+        public static class PearsonCorrelation
         {
-            var values1 = new List<double>();
-            var values2 = new List<double>();
+        public static (double[][] X, string[] cols) ToDenseColumns(DataTable dt)
+        {
+            var numericCols = dt.Columns.Cast<DataColumn>()
+                .Where(c => IsNumeric(c.DataType))
+                .ToList();
 
-            foreach (DataRow row in dataTable.Rows)
+            int n = dt.Rows.Count;
+            int k = numericCols.Count;
+            var X = new double[k][];
+            for (int j = 0; j < k; j++) X[j] = new double[n];
+
+            for (int j = 0; j < k; j++)
             {
-                var val1 = row[column1];
-                var val2 = row[column2];
-
-                if (val1 != null && val1 != DBNull.Value &&
-                    val2 != null && val2 != DBNull.Value &&
-                    double.TryParse(val1.ToString(), out double d1) &&
-                    double.TryParse(val2.ToString(), out double d2))
+                var col = numericCols[j];
+                for (int i = 0; i < n; i++)
                 {
-                    values1.Add(d1);
-                    values2.Add(d2);
+                    var v = dt.Rows[i][col];
+                    X[j][i] = (v == null || v == DBNull.Value) ? double.NaN : Convert.ToDouble(v);
                 }
             }
-
-            if (values1.Count < 2)
-                return 0.0;
-
-            double mean1 = values1.Average();
-            double mean2 = values2.Average();
-
-            double numerator = 0;
-            double sumSq1 = 0;
-            double sumSq2 = 0;
-
-            for (int i = 0; i < values1.Count; i++)
-            {
-                double diff1 = values1[i] - mean1;
-                double diff2 = values2[i] - mean2;
-
-                numerator += diff1 * diff2;
-                sumSq1 += diff1 * diff1;
-                sumSq2 += diff2 * diff2;
-            }
-
-            double denominator = Math.Sqrt(sumSq1 * sumSq2);
-
-            return denominator == 0 ? 0.0 : numerator / denominator;
+            return (X, numericCols.Select(c => c.ColumnName).ToArray());
         }
 
-        
-        
+        public static (double[][] X, int nRows) DropRowsWithAnyNaN(double[][] X)
+        {
+            int n = X[0].Length, k = X.Length;
+            var keep = new bool[n];
+            int m = 0;
+            for (int i = 0; i < n; i++)
+            {
+                bool ok = true;
+                for (int j = 0; j < k; j++) if (double.IsNaN(X[j][i])) { ok = false; break; }
+                if (ok) { keep[i] = true; m++; }
+            }
+            var Y = new double[k][];
+            for (int j = 0; j < k; j++)
+            {
+                Y[j] = new double[m];
+                for (int i = 0, t = 0; i < n; i++) if (keep[i]) Y[j][t++] = X[j][i];
+            }
+            return (Y, m);
+        }
 
-        public class FeatureNameLabelProvider : LabelProviderBase
+        public static double[,] Correlation(double[][] X)
+        {
+            int k = X.Length;
+            int n = X[0].Length;
+            var mean = new double[k];
+            var std = new double[k];
+
+            for (int j = 0; j < k; j++)
+            {
+                double s = 0;
+                for (int i = 0; i < n; i++) s += X[j][i];
+                double m = s / n;
+                mean[j] = m;
+
+                double ss = 0;
+                for (int i = 0; i < n; i++) { double d = X[j][i] - m; ss += d * d; }
+                std[j] = Math.Sqrt(ss / (n - 1));
+                if (std[j] == 0) std[j] = double.Epsilon;
+            }
+
+            var corr = new double[k, k];
+            for (int j = 0; j < k; j++) corr[j, j] = 1.0;
+
+            var centered = new double[k][];
+            for (int j = 0; j < k; j++)
+            {
+                var col = X[j];
+                var c = new double[n];
+                double m = mean[j];
+                for (int i = 0; i < n; i++) c[i] = col[i] - m;
+                centered[j] = c;
+            }
+
+            Parallel.For(0, k, j =>
+            {
+                for (int l = j + 1; l < k; l++)
+                {
+                    double dot = SimdDot(centered[j], centered[l]);
+                    double r = dot / ((n - 1) * std[j] * std[l]);
+                    corr[j, l] = r;
+                    corr[l, j] = r;
+                }
+            });
+
+            return corr;
+        }
+
+   
+            private static double SimdDot(double[] a, double[] b)
+            {
+                int len = a.Length;
+                int step = SN.Vector<double>.Count;
+                int i = 0;
+                var acc = SN.Vector<double>.Zero;
+
+                for (; i <= len - step; i += step)
+                    acc += new SN.Vector<double>(a, i) * new SN.Vector<double>(b, i);
+
+                double sum = 0;
+                for (int s = 0; s < step; s++) sum += acc[s];
+
+                for (; i < len; i++) sum += a[i] * b[i];
+                return sum;
+            }
+
+
+            private static bool IsNumeric(Type t) =>
+            t == typeof(byte) || t == typeof(short) || t == typeof(int) || t == typeof(long) ||
+            t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+    }
+
+
+
+    public class FeatureNameLabelProvider : LabelProviderBase
         {
             private readonly string[] featureNames;
 
@@ -853,21 +913,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
 
             var legendPanel = CreateLegendPanel();
             Grid.SetRow(legendPanel, 2);
-            mainGrid.Children.Add(legendPanel);
-
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-
-            
-            
+            mainGrid.Children.Add(legendPanel); 
 
             containerControl.Content = mainGrid;
             return containerControl;

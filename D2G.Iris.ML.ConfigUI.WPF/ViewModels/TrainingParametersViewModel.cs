@@ -23,6 +23,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
     
         private bool _useAutoML = false;
         private int _maxExperimentTimeInSeconds = 30;
+        private int _maxModels = 10;
         private string _optimizingMetric = "Accuracy";
 
      
@@ -100,6 +101,12 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
         {
             get => _maxExperimentTimeInSeconds;
             set => SetProperty(ref _maxExperimentTimeInSeconds, Math.Max(1, Math.Min(3600, value)));
+        }
+
+        public int MaxModels
+        {
+            get => _maxModels;
+            set => SetProperty(ref _maxModels, Math.Max(1, Math.Min(100, value)));
         }
 
         public string OptimizingMetric
@@ -301,12 +308,14 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             {
                 UseAutoML = autoMLConfig.Enabled;
                 MaxExperimentTimeInSeconds = autoMLConfig.MaxExperimentTimeInSeconds;
+                MaxModels = autoMLConfig.MaxModels;
                 OptimizingMetric = autoMLConfig.OptimizingMetric ?? "Accuracy";
             }
             else
             {
                 UseAutoML = false;
                 MaxExperimentTimeInSeconds = 30;
+                MaxModels = 10;
                 OptimizingMetric = "Accuracy";
             }
 
@@ -367,6 +376,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             {
                 Enabled = UseAutoML,
                 MaxExperimentTimeInSeconds = MaxExperimentTimeInSeconds,
+                MaxModels = MaxModels,
                 OptimizingMetric = OptimizingMetric
             };
 

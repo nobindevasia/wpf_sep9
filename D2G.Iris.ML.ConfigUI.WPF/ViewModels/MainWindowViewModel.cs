@@ -723,7 +723,7 @@ namespace D2G.Iris.ML.ConfigUI.WPF.ViewModels
             DataProcessingPipeline.SaveToConfig(_currentConfig);
         }
     }
-
+    
     
     public class BinaryClassificationTrainingData
     {
